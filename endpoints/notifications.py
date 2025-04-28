@@ -13,20 +13,19 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Pydantic model para la respuesta de notificación
 class NotificationResponse(BaseModel):
-    notifications_id: int  # ID de la notificación
-    message: Optional[str]  # Mensaje de la notificación
-    date: datetime  # Fecha de la notificación
-    notification_type: Optional[str]  # Tipo de notificación
-    invitation_id: Optional[int]  # ID de la invitación asociada (si aplica)
-    farm_id: Optional[int]  # ID de la finca asociada (si aplica)
-    notification_state: Optional[str]  # Estado de la notificación
+    notifications_id: int
+    message: Optional[str]
+    date: datetime
+    notification_type: Optional[str]
+    invitation_id: Optional[int]
+    farm_id: Optional[int]
+    notification_state: Optional[str]
 
     class Config:
-        from_attributes = True  # Permitir que los atributos se usen como parámetros de entrada
+        from_attributes = True
         json_encoders = {
-            datetime: lambda v: v.isoformat()  # Serializar fechas en formato ISO
+            datetime: lambda v: v.isoformat()
         }
 
 @router.get("/get-notification")
