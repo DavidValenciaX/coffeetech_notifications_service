@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from endpoints import notifications
-import logging
+from utils.logger import setup_logger
 
 app = FastAPI()
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Setup logging for the entire application
+logger = setup_logger()
+logger.info("Starting CoffeeTech Notification Service")
 
 # Incluir las rutas de notificaciones
 app.include_router(notifications.router, prefix="/notification", tags=["Notificaciones"])
@@ -18,4 +19,5 @@ def read_root():
     Returns:
         dict: Un diccionario con un mensaje de bienvenida.
     """
-    return {"message": "Welcome to the FastAPI application CoffeeTech!"}
+    logger.info("Root endpoint accessed")
+    return {"message": "Welcome to the FastAPI application CoffeeTech Notification Service!"}
