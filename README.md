@@ -54,10 +54,10 @@ To build and run the service with Docker:
 
 ```bash
 docker build -t coffeetech-notifications-service .
-docker run -p 8000:8000 --env-file .env coffeetech-notifications-service
+docker run -p 8001:8000 --env-file .env coffeetech-notifications-service
 ```
 
-This will expose the service at [http://localhost:8000](http://localhost:8000).
+This will expose the service at [http://localhost:8001](http://localhost:8001).
 
 ## Project Structure
 
