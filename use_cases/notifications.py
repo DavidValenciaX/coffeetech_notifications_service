@@ -11,6 +11,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+USER_SERVICE_BASE_URL = "http://localhost:8000/user-service"
+
 class NotificationResponse(BaseModel):
     notification_id: int
     message: Optional[str]
@@ -34,10 +36,9 @@ def verify_session_token_use_case(session_token: str) -> Optional[dict]:
     Verifica el token de sesión haciendo una solicitud al servicio de usuarios.
     Retorna un diccionario con los datos del usuario si es válido, o None si no lo es.
     """
-    USER_SERVICE_URL = "http://localhost:8000/user-service/session-token-verification"
     try:
         with httpx.Client(timeout=5.0) as client:
-            response = client.post(USER_SERVICE_URL, json={"session_token": session_token})
+            response = client.post(f"{USER_SERVICE_BASE_URL}/session-token-verification", json={"session_token": session_token})
             if response.status_code == 200:
                 data = response.json()
                 if data.get("status") == "success" and "user" in data.get("data", {}):
