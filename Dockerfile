@@ -26,11 +26,11 @@ COPY --from=build /app /app
 
 WORKDIR /app
 
-# Expone el puerto interno 8001
-EXPOSE 8001
+# Expone el puerto interno 8000
+EXPOSE 8000
 
 # Copia el archivo .env para variables de entorno
 ENV PYTHONUNBUFFERED=1
 
-# Comando de arranque: usa el puerto interno 8001, el externo se mapea con -p $PORT:8001
-CMD ["/app/.venv/bin/fastapi", "run", "main.py", "--port", "8001", "--host", "0.0.0.0"]
+# Comando de arranque: usa el puerto interno 8000, el externo se mapea con -p $PORT:8000
+CMD ["/app/.venv/bin/fastapi", "run", "main.py", "--port", "8000", "--host", "0.0.0.0"]
