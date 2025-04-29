@@ -47,7 +47,7 @@ jobs:
           docker rm coffeetech-notifications-service || true
 
           echo "Starting new container..."
-          docker run -d --name coffeetech-notifications-service --restart always -p 8001:8001 --env-file .env coffeetech-notifications-service
+          docker run -d --add-host=host.docker.internal:host-gateway --name coffeetech-notifications-service --restart always -p 8001:8000 --env-file .env coffeetech-notifications-service
 
           echo "Deployment completed successfully!"
         EOF
