@@ -57,7 +57,7 @@ def create_response(
       - dict, list, tuple, set anidados
 
     Args:
-        state (str): "success" o "error".
+        status (str): "success" o "error".
         message (str): Mensaje descriptivo.
         data (Optional[Any]): Cualquier dato JSON-like o modelo/Decimal.
         status_code (int): Código HTTP (por defecto 200).
@@ -86,7 +86,7 @@ def session_token_invalid_response() -> ORJSONResponse:
         JSONResponse: Respuesta en formato JSON que indica que las credenciales han expirado.
     """
     return create_response(
-        state="error",
+        status="error",
         message="Credenciales expiradas, cerrando sesión.",
         data={},
         status_code=401
