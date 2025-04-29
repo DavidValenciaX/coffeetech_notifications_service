@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from models.models import Notifications, UserDevices, NotificationDevices
 import logging
 from utils.response import create_response, session_token_invalid_response
-import httpx
+from use_cases.verify_session_token_use_case import verify_session_token_use_case
 
 logger = logging.getLogger(__name__)
 
@@ -29,24 +29,6 @@ class NotificationResponse(BaseModel):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
-
-# Nuevo caso de uso para verificar el token de sesión llamando al servicio de usuarios
-def verify_session_token_use_case(session_token: str) -> Optional[dict]:
-    """
-    Verifica el token de sesión haciendo una solicitud al servicio de usuarios.
-    Retorna un diccionario con los datos del usuario si es válido, o None si no lo es.
-    """
-    try:
-        with httpx.Client(timeout=5.0) as client:
-            response = client.post(f"{USER_SERVICE_BASE_URL}/session-token-verification", json={"session_token": session_token})
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("status") == "success" and "user" in data.get("data", {}):
-                    return data["data"]["user"]
-            logger.warning(f"Token inválido o error en la verificación: {response.text}")
-    except Exception as e:
-        logger.error(f"Error al verificar el token de sesión: {e}")
-    return None
 
 def get_notifications_use_case(session_token: str, db: Session = Depends(get_db_session)):
     user = verify_session_token_use_case(session_token)
