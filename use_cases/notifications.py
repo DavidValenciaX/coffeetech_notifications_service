@@ -4,7 +4,7 @@ from typing import Optional
 from datetime import datetime
 from dataBase import get_db_session
 from pydantic import BaseModel
-from models.models import Notifications
+from models.models import Notifications, UserDevices, NotificationDevices
 import logging
 from utils.response import create_response, session_token_invalid_response
 import httpx
@@ -57,7 +57,6 @@ def get_notifications_use_case(session_token: str, db: Session = Depends(get_db_
     logger.info(f"Usuario autenticado: {user['user_id']} - {user['name']}")
 
     # Obtener los dispositivos del usuario
-    from models.models import UserDevices, NotificationDevices  # Importar aquí para evitar ciclos
     user_devices = db.query(UserDevices).filter(UserDevices.user_id == user['user_id']).all()
     user_device_ids = [ud.user_device_id for ud in user_devices]
     logger.info(f"Dispositivos del usuario: {user_device_ids}")
