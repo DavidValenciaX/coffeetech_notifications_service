@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 USER_SERVICE_BASE_URL = "http://localhost:8000/user-service"
 
-def verify_session_token_use_case(session_token: str) -> Optional[dict]:
+def verify_session_token(session_token: str) -> Optional[dict]:
     """
     Verifica el token de sesión haciendo una solicitud al servicio de usuarios.
     Retorna un diccionario con los datos del usuario si es válido, o None si no lo es.
