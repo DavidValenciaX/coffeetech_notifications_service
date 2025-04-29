@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from endpoints import notifications
+from endpoints import notifications, devices
 from utils.logger import setup_logger
 
 app = FastAPI()
@@ -11,7 +11,9 @@ logger.info("Starting CoffeeTech Notification Service")
 # Incluir las rutas de notificaciones
 app.include_router(notifications.router, prefix="/notification", tags=["Notificaciones"])
 
-@app.get("/")
+app.include_router(devices.router, prefix="/notifications-service", tags=["Dispositivos"])
+
+@app.get("/", include_in_schema=False)
 def read_root():
     """
     Ruta raíz que retorna un mensaje de bienvenida.
