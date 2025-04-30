@@ -5,13 +5,11 @@ from datetime import datetime
 from dataBase import get_db_session
 from pydantic import BaseModel
 from models.models import Notifications, UserDevices, NotificationDevices
-import logging
 from utils.response import create_response, session_token_invalid_response
 from use_cases.verify_session_token_use_case import verify_session_token
+import logging
 
 logger = logging.getLogger(__name__)
-
-USER_SERVICE_BASE_URL = "http://localhost:8000/user-service"
 
 class NotificationResponse(BaseModel):
     notification_id: int

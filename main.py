@@ -11,7 +11,7 @@ logger.info("Starting CoffeeTech Notification Service")
 # Incluir las rutas de notificaciones
 app.include_router(notifications.router, prefix="/notification", tags=["Notificaciones"])
 
-app.include_router(devices.router, prefix="/notifications-service", tags=["Dispositivos"])
+app.include_router(devices.router)
 
 @app.get("/", include_in_schema=False)
 def read_root():
