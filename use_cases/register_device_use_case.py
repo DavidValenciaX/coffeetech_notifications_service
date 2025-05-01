@@ -1,6 +1,6 @@
 from models.models import UserDevices
 
-def register_or_get_device_use_case(db, fcm_token, user_id=None):
+def register_device(db, fcm_token, user_id=None):
     """
     Busca un dispositivo por FCM token. Si no existe, lo crea.
     """

@@ -6,7 +6,7 @@ from dataBase import get_db_session
 from pydantic import BaseModel
 from models.models import Notifications, UserDevices, NotificationDevices
 from utils.response import create_response, session_token_invalid_response
-from use_cases.verify_session_token_use_case import verify_session_token
+from adapters.user_client import verify_session_token
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,7 +28,7 @@ class NotificationResponse(BaseModel):
             datetime: lambda v: v.isoformat()
         }
 
-def get_notifications_use_case(session_token: str, db: Session = Depends(get_db_session)):
+def get_notifications(session_token: str, db: Session = Depends(get_db_session)):
     user = verify_session_token(session_token)
     if not user:
         logger.warning(f"Sesión inválida para el token: {session_token}")

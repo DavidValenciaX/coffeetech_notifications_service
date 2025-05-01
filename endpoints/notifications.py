@@ -2,14 +2,14 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from dataBase import get_db_session
 import logging
-from use_cases.notifications import get_notifications_use_case
+from use_cases.get_notifications_use_case import get_notifications
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 @router.get("/get-notification")
-def get_notifications(session_token: str, db: Session = Depends(get_db_session)):
+def get_notifications_endpoint(session_token: str, db: Session = Depends(get_db_session)):
     """
     Endpoint para obtener las notificaciones de un usuario autenticado.
 
@@ -21,4 +21,4 @@ def get_notifications(session_token: str, db: Session = Depends(get_db_session))
     - Respuesta con las notificaciones del usuario.
     """
     # Verificar el session_token y obtener el usuario autenticado
-    return get_notifications_use_case(session_token, db)
+    return get_notifications(session_token, db)

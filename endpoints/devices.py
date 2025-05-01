@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 from dataBase import get_db_session
 from utils.response import create_response
-from use_cases.devices import register_or_get_device_use_case
+from use_cases.register_device_use_case import register_device
 
 router = APIRouter()
 
@@ -13,11 +13,11 @@ class RegisterDeviceRequest(BaseModel):
     user_id: Optional[int] = None
 
 @router.post("/register-device", include_in_schema=False)
-def register_device(request: RegisterDeviceRequest, db: Session = Depends(get_db_session)):
+def register_device_endpoint(request: RegisterDeviceRequest, db: Session = Depends(get_db_session)):
     """
     Registra un dispositivo por FCM token (o lo retorna si ya existe).
     """
-    device = register_or_get_device_use_case(db, request.fcm_token, request.user_id)
+    device = register_device(db, request.fcm_token, request.user_id)
     if device:
         return create_response("success", "Dispositivo registrado/obtenido", {
             "user_device_id": device.user_device_id,
