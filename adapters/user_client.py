@@ -23,7 +23,7 @@ def verify_session_token(session_token: str) -> Optional[Union[Dict[str, Any], U
     """
     try:
         with httpx.Client(timeout=5.0) as client:
-            response = client.post(f"{USER_SERVICE_URL}/session-token-verification", json={"session_token": session_token})
+            response = client.post(f"{USER_SERVICE_URL}/users-service/session-token-verification", json={"session_token": session_token})
             if response.status_code == 200:
                 data = response.json()
                 if data.get("status") == "success" and "user" in data.get("data", {}):
