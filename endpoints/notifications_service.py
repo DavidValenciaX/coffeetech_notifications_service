@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from dataBase import get_db_session
-from models.models import NotificationStates, NotificationTypes, Notifications, UserDevices
+from models.models import NotificationDevices, NotificationStates, NotificationTypes, Notifications, UserDevices
 from pydantic import BaseModel
 from typing import Optional
 from utils.response import create_response
@@ -131,9 +131,11 @@ def send_notification_endpoint(
 ):
     """
     Endpoint para enviar una notificación.
+    Envía la notificación a todos los dispositivos del usuario especificado.
     """
     try:
         bogota_tz = pytz.timezone("America/Bogota")
+        # Crear la notificación
         new_notification = Notifications(
             message=request.message,
             notification_date=datetime.now(bogota_tz),
@@ -143,14 +145,61 @@ def send_notification_endpoint(
             notification_state_id=request.notification_state_id
         )
         db.add(new_notification)
+        db.flush()  # Para obtener el notification_id sin hacer commit todavía
+
+        # Obtener todos los dispositivos del usuario
+        user_devices = db.query(UserDevices).filter(UserDevices.user_id == request.user_id).all()
+        
+        sent_count = 0
+        fcm_errors = []
+        
+        # Enviar a todos los dispositivos del usuario y registrar en NotificationDevices
+        for device in user_devices:
+            try:
+                if request.fcm_title and request.fcm_body:
+                    send_fcm_notification(device.fcm_token, request.fcm_title, request.fcm_body)
+                
+                # Registrar la relación entre notificación y dispositivo
+                notification_device = NotificationDevices(
+                    notification_id=new_notification.notification_id,
+                    user_device_id=device.user_device_id
+                )
+                db.add(notification_device)
+                sent_count += 1
+            except Exception as device_error:
+                fcm_errors.append(f"Error enviando a dispositivo {device.user_device_id}: {str(device_error)}")
+                logger.error(f"Error enviando FCM: {str(device_error)}")
+        
+        # Si se proporcionó un token específico adicional que no pertenece al usuario
+        if request.fcm_token and request.fcm_title and request.fcm_body:
+            specific_device = db.query(UserDevices).filter(UserDevices.fcm_token == request.fcm_token).first()
+            if specific_device:
+                # Verificar si ya enviamos a este dispositivo 
+                if specific_device.user_id != request.user_id:
+                    try:
+                        send_fcm_notification(request.fcm_token, request.fcm_title, request.fcm_body)
+                        # Registrar la relación
+                        notification_device = NotificationDevices(
+                            notification_id=new_notification.notification_id,
+                            user_device_id=specific_device.user_device_id
+                        )
+                        db.add(notification_device)
+                        sent_count += 1
+                    except Exception as e:
+                        fcm_errors.append(f"Error enviando a token específico: {str(e)}")
+                        logger.error(f"Error enviando FCM a token específico: {str(e)}")
+        
         db.commit()
 
-        if request.fcm_token and request.fcm_title and request.fcm_body:
-            send_fcm_notification(request.fcm_token, request.fcm_title, request.fcm_body)
+        response_data = {
+            "notification_id": new_notification.notification_id,
+            "devices_notified": sent_count
+        }
+        
+        if fcm_errors:
+            response_data["fcm_errors"] = fcm_errors
 
-        return create_response("success", "Notificación enviada correctamente", {
-            "notification_id": new_notification.notification_id
-        })
+        return create_response("success", "Notificación enviada correctamente", response_data)
     except Exception as e:
         db.rollback()
         logger.error(f"Error enviando notificación: {str(e)}")
