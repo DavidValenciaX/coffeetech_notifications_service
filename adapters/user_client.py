@@ -1,8 +1,9 @@
+from typing import Optional, Any, Dict, Union
+from pydantic import BaseModel
+from dotenv import load_dotenv
 import logging
 import httpx
-from typing import Optional
 import os
-from dotenv import load_dotenv
 
 load_dotenv(override=True, encoding="utf-8")
 
@@ -10,7 +11,12 @@ logger = logging.getLogger(__name__)
 
 USER_SERVICE_URL = os.getenv("USER_SERVICE_URL", "http://localhost:8000")
 
-def verify_session_token(session_token: str) -> Optional[dict]:
+class UserResponse(BaseModel):
+    user_id: int
+    name: str
+    email: str
+
+def verify_session_token(session_token: str) -> Optional[Union[Dict[str, Any], UserResponse]]:
     """
     Verifica el token de sesión haciendo una solicitud al servicio de usuarios.
     Retorna un diccionario con los datos del usuario si es válido, o None si no lo es.
