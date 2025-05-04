@@ -7,6 +7,9 @@ from typing import Optional
 from utils.response import create_response
 from use_cases.register_device_use_case import register_device
 import logging
+from datetime import datetime
+import pytz
+from use_cases.send_fcm_notification_use_case import send_fcm_notification
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +86,17 @@ class RegisterDeviceRequest(BaseModel):
 class UpdateNotificationStateRequest(BaseModel):
     notification_state_id: int
 
+class SendNotificationRequest(BaseModel):
+    message: str
+    user_id: int
+    notification_type_id: int
+    entity_type: str
+    entity_id: int
+    notification_state_id: int
+    fcm_token: Optional[str] = None
+    fcm_title: Optional[str] = None
+    fcm_body: Optional[str] = None
+
 @router.post("/register-device", include_in_schema=False)
 def register_device_endpoint(request: RegisterDeviceRequest, db: Session = Depends(get_db_session)):
     """
@@ -109,3 +123,35 @@ def update_notification_state(notification_id: int, request: UpdateNotificationS
     notif.notification_state_id = request.notification_state_id
     db.commit()
     return create_response("success", "Estado de notificación actualizado")
+
+@router.post("/send-notification", include_in_schema=False)
+def send_notification_endpoint(
+    request: SendNotificationRequest,
+    db: Session = Depends(get_db_session)
+):
+    """
+    Endpoint para enviar una notificación.
+    """
+    try:
+        bogota_tz = pytz.timezone("America/Bogota")
+        new_notification = Notifications(
+            message=request.message,
+            notification_date=datetime.now(bogota_tz),
+            entity_type=request.entity_type,
+            entity_id=request.entity_id,
+            notification_type_id=request.notification_type_id,
+            notification_state_id=request.notification_state_id
+        )
+        db.add(new_notification)
+        db.commit()
+
+        if request.fcm_token and request.fcm_title and request.fcm_body:
+            send_fcm_notification(request.fcm_token, request.fcm_title, request.fcm_body)
+
+        return create_response("success", "Notificación enviada correctamente", {
+            "notification_id": new_notification.notification_id
+        })
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error enviando notificación: {str(e)}")
+        return create_response("error", f"Error al enviar la notificación: {str(e)}", status_code=500)
