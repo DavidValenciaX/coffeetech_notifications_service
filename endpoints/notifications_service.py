@@ -62,9 +62,26 @@ def get_user_devices(user_id: int, db: Session = Depends(get_db_session)):
         for d in devices
     ]
 
+@router.get("/notifications/by-invitation/{invitation_id}", include_in_schema=False)
+def get_notification_by_invitation(invitation_id: int, db: Session = Depends(get_db_session)):
+    """
+    Devuelve el notification_id asociado a una invitación (entity_type='invitation', entity_id=invitation_id).
+    """
+    notif = db.query(Notifications).filter(
+        Notifications.entity_type == "invitation",
+        Notifications.entity_id == invitation_id
+    ).first()
+    if notif:
+        return {"notification_id": notif.notification_id}
+    else:
+        return {"notification_id": None}
+
 class RegisterDeviceRequest(BaseModel):
     fcm_token: str
     user_id: Optional[int] = None
+
+class UpdateNotificationStateRequest(BaseModel):
+    notification_state_id: int
 
 @router.post("/register-device", include_in_schema=False)
 def register_device_endpoint(request: RegisterDeviceRequest, db: Session = Depends(get_db_session)):
@@ -80,3 +97,15 @@ def register_device_endpoint(request: RegisterDeviceRequest, db: Session = Depen
         })
     else:
         return create_response("error", "No se pudo registrar/obtener el dispositivo")
+
+@router.patch("/notifications/{notification_id}/state", include_in_schema=False)
+def update_notification_state(notification_id: int, request: UpdateNotificationStateRequest, db: Session = Depends(get_db_session)):
+    """
+    Actualiza el estado de una notificación.
+    """
+    notif = db.query(Notifications).filter(Notifications.notification_id == notification_id).first()
+    if not notif:
+        return create_response("error", "Notificación no encontrada", status_code=404)
+    notif.notification_state_id = request.notification_state_id
+    db.commit()
+    return create_response("success", "Estado de notificación actualizado")
