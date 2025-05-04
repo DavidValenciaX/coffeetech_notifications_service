@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from dataBase import get_db_session
-from models.models import NotificationStates, NotificationTypes, Notifications
+from models.models import NotificationStates, NotificationTypes, Notifications, UserDevices
 from pydantic import BaseModel
 from typing import Optional
 from utils.response import create_response
@@ -47,6 +47,21 @@ def get_all_notifications(db: Session = Depends(get_db_session)):
         for n in notifs
     ]
     
+@router.get("/user-devices/{user_id}", include_in_schema=False)
+def get_user_devices(user_id: int, db: Session = Depends(get_db_session)):
+    """
+    Devuelve todos los dispositivos (fcm_token) asociados a un usuario.
+    """
+    devices = db.query(UserDevices).filter(UserDevices.user_id == user_id).all()
+    return [
+        {
+            "user_device_id": d.user_device_id,
+            "user_id": d.user_id,
+            "fcm_token": d.fcm_token
+        }
+        for d in devices
+    ]
+
 class RegisterDeviceRequest(BaseModel):
     fcm_token: str
     user_id: Optional[int] = None
