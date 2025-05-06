@@ -42,7 +42,6 @@ def get_all_notifications(db: Session = Depends(get_db_session)):
             "notification_id": n.notification_id,
             "message": n.message,
             "notification_date": n.notification_date,
-            "entity_type": n.entity_type,
             "entity_id": n.entity_id,
             "notification_type_id": n.notification_type_id,
             "notification_state_id": n.notification_state_id
@@ -90,7 +89,6 @@ class SendNotificationRequest(BaseModel):
     message: str
     user_id: int
     notification_type_id: int
-    entity_type: str
     entity_id: int
     notification_state_id: int
     fcm_token: Optional[str] = None
@@ -139,7 +137,6 @@ def send_notification_endpoint(
         new_notification = Notifications(
             message=request.message,
             notification_date=datetime.now(bogota_tz),
-            entity_type=request.entity_type,
             entity_id=request.entity_id,
             notification_type_id=request.notification_type_id,
             notification_state_id=request.notification_state_id

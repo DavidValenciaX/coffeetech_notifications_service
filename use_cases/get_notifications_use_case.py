@@ -15,7 +15,6 @@ class NotificationResponse(BaseModel):
     notification_id: int
     message: Optional[str]
     notification_date: datetime
-    entity_type: Optional[str]
     entity_id: Optional[int]
     notification_type: Optional[str]
     notification_state: Optional[str]
@@ -71,7 +70,6 @@ def get_notifications(session_token: str, db: Session = Depends(get_db_session))
                 notification_id=notification.notification_id,
                 message=notification.message,
                 notification_date=notification.notification_date,
-                entity_type=notification.entity_type,
                 entity_id=notification.entity_id,
                 notification_type=notification.notification_type.name if notification.notification_type else None,
                 notification_state=notification.state.name if notification.state else None
