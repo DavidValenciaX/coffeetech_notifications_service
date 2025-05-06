@@ -38,8 +38,12 @@ class UserDevices(Base):
     __tablename__ = 'user_devices'
     user_device_id = Column(Integer, primary_key=True)
     user_id = Column(Integer, nullable=False)
-    fcm_token = Column(String(255), nullable=False, unique=True)
+    fcm_token = Column(String(255), nullable=False) 
     devices = relationship("NotificationDevices", back_populates="user_device", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'fcm_token', name='uq_user_fcm_token'),
+    )
 
 # Notification Devices
 class NotificationDevices(Base):

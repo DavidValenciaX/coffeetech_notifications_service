@@ -5,11 +5,11 @@ from models.models import NotificationDevices, NotificationStates, NotificationT
 from pydantic import BaseModel
 from typing import Optional
 from utils.response import create_response
-from use_cases.register_device_use_case import register_device
+from utils.register_device import register_device
 import logging
 from datetime import datetime
 import pytz
-from use_cases.send_fcm_notification_use_case import send_fcm_notification
+from utils.send_fcm_notification import send_fcm_notification
 
 logger = logging.getLogger(__name__)
 
