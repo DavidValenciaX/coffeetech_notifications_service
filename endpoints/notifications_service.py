@@ -67,10 +67,15 @@ def get_user_devices(user_id: int, db: Session = Depends(get_db_session)):
 @router.get("/notifications/by-invitation/{invitation_id}", include_in_schema=False)
 def get_notification_by_invitation(invitation_id: int, db: Session = Depends(get_db_session)):
     """
-    Devuelve el notification_id asociado a una invitación (entity_type='invitation', entity_id=invitation_id).
+    Devuelve el notification_id asociado a una invitación.
     """
+    
+    notification_type_id = db.query(NotificationTypes).filter(
+        NotificationTypes.name == "Invitation"
+    ).first().notification_type_id
+    
     notif = db.query(Notifications).filter(
-        Notifications.entity_type == "invitation",
+        Notifications.notification_type_id == notification_type_id,
         Notifications.entity_id == invitation_id
     ).first()
     if notif:
