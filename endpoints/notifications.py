@@ -2,13 +2,60 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from dataBase import get_db_session
 import logging
-from use_cases.get_notifications_use_case import get_notifications
+from use_cases.get_notifications_use_case import get_notifications, NotificationResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.get("/get-notification")
+@router.get(
+    "/get-notification",
+    response_model=dict,
+    responses={
+        200: {
+            "description": "Respuesta exitosa con notificaciones o sin notificaciones.",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "con_notificaciones": {
+                            "summary": "Con notificaciones",
+                            "value": {
+                                "status": "success",
+                                "message": "Notificaciones obtenidas exitosamente.",
+                                "data": [
+                                    {
+                                        "notification_id": 1,
+                                        "message": "Tienes una nueva invitación",
+                                        "notification_date": "2024-06-01T12:34:56.789Z",
+                                        "invitation_id": 123,
+                                        "notification_type": "INVITATION",
+                                        "notification_state": "UNREAD"
+                                    }
+                                ]
+                            }
+                        },
+                        "sin_notificaciones": {
+                            "summary": "Sin notificaciones",
+                            "value": {
+                                "status": "success",
+                                "message": "No hay notificaciones para este usuario.",
+                                "data": []
+                            }
+                        },
+                        "token_invalido": {
+                            "summary": "Token inválido",
+                            "value": {
+                                "status": "error",
+                                "message": "Token de sesión inválido.",
+                                "data": []
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 def get_notifications_endpoint(session_token: str, db: Session = Depends(get_db_session)):
     """
     Endpoint para obtener las notificaciones de un usuario autenticado.
