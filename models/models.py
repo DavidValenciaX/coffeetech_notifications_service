@@ -24,7 +24,7 @@ class Notifications(Base):
     notification_id = Column(Integer, primary_key=True)
     message = Column(String(255), nullable=True)
     notification_date = Column(DateTime(timezone=True), nullable=False)
-    entity_id = Column(Integer, nullable=True)
+    invitation_id = Column(Integer, nullable=False)
     notification_type_id = Column(Integer, ForeignKey('notification_types.notification_type_id', ondelete="CASCADE"), nullable=False)
     notification_state_id = Column(Integer, ForeignKey('notification_states.notification_state_id'), nullable=False)
 
