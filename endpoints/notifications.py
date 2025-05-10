@@ -28,8 +28,8 @@ router = APIRouter()
                                         "message": "Tienes una nueva invitación",
                                         "notification_date": "2024-06-01T12:34:56.789Z",
                                         "invitation_id": 123,
-                                        "notification_type": "INVITATION",
-                                        "notification_state": "UNREAD"
+                                        "notification_type": "Invitation",
+                                        "notification_state": "Pendiente"
                                     }
                                 ]
                             }
