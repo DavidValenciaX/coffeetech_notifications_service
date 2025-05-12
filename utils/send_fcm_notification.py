@@ -6,7 +6,7 @@ from firebase_admin import credentials, messaging, exceptions
 logger = logging.getLogger(__name__)
 
 SERVICE_ACCOUNT = os.path.join(
-    os.path.dirname(__file__),  # carpeta donde está este .py
+    os.path.dirname(os.path.dirname(__file__)),  # directorio raíz del proyecto
     'serviceAccountKey.json'
 )
 
