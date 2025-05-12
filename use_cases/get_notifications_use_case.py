@@ -1,31 +1,13 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
-from typing import Optional
-from datetime import datetime
 from dataBase import get_db_session
-from pydantic import BaseModel
 from models.models import Notifications, UserDevices, NotificationDevices
 from utils.response import create_response, session_token_invalid_response
 from adapters.user_client import verify_session_token
+from domain.schemas import NotificationResponse
 import logging
 
 logger = logging.getLogger(__name__)
-
-class NotificationResponse(BaseModel):
-    notification_id: int
-    message: Optional[str]
-    notification_date: datetime
-    invitation_id: int
-    notification_type: Optional[str]
-    notification_state: Optional[str]
-
-    class Config:
-        # Pydantic v2: permite poblar desde atributos ORM
-        from_attributes = True
-        # formatea datetimes a ISO 8601
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
 
 def get_notifications(session_token: str, db: Session = Depends(get_db_session)):
     user = verify_session_token(session_token)

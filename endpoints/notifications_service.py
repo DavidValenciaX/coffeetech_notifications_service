@@ -2,14 +2,17 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from dataBase import get_db_session
 from models.models import NotificationDevices, NotificationStates, NotificationTypes, Notifications, UserDevices
-from pydantic import BaseModel
-from typing import Optional
 from utils.response import create_response
 from utils.register_device import register_device
-import logging
 from datetime import datetime
-import pytz
 from utils.send_fcm_notification import send_fcm_notification
+from domain.schemas import (
+    RegisterDeviceRequest,
+    UpdateNotificationStateRequest,
+    SendNotificationRequest,
+)
+import logging
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -82,23 +85,6 @@ def get_notification_by_invitation(invitation_id: int, db: Session = Depends(get
         return {"notification_id": notif.notification_id}
     else:
         return {"notification_id": None}
-
-class RegisterDeviceRequest(BaseModel):
-    fcm_token: str
-    user_id: Optional[int] = None
-
-class UpdateNotificationStateRequest(BaseModel):
-    notification_state_id: int
-
-class SendNotificationRequest(BaseModel):
-    message: str
-    user_id: int
-    notification_type_id: int
-    invitation_id: int
-    notification_state_id: int
-    fcm_token: Optional[str] = None
-    fcm_title: Optional[str] = None
-    fcm_body: Optional[str] = None
 
 @router.post("/register-device", include_in_schema=False)
 def register_device_endpoint(request: RegisterDeviceRequest, db: Session = Depends(get_db_session)):
