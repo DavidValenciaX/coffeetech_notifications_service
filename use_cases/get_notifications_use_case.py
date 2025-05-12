@@ -1,9 +1,10 @@
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from dataBase import get_db_session
-from models.models import Notifications, UserDevices, NotificationDevices
+from models.models import Notifications, UserDevices, NotificationDevices, NotificationTypes
 from utils.response import create_response, session_token_invalid_response
 from adapters.user_client import verify_session_token
+from adapters.invitation_client import get_invitation_details
 from domain.schemas import NotificationResponse
 import logging
 
@@ -41,8 +42,26 @@ def get_notifications(session_token: str, db: Session = Depends(get_db_session))
     notifications = db.query(Notifications).filter(Notifications.notification_id.in_(notification_ids)).all()
     logger.info(f"Notificaciones obtenidas: {len(notifications)}")
 
-    if not notifications:
-        logger.info("No hay notificaciones para este usuario.")
+    # Filtrar notificaciones tipo invitación para asegurar que son para este usuario específico
+    filtered_notifications = []
+    invitation_type = db.query(NotificationTypes).filter(NotificationTypes.name == "Invitation").first()
+    
+    for notification in notifications:
+        # Para notificaciones tipo invitación, verificar si el usuario es el invitado
+        if invitation_type and notification.notification_type_id == invitation_type.notification_type_id:
+            # Obtener detalles de la invitación para verificar el invited_user_id
+            if notification.invitation_id:
+                invitation = get_invitation_details(notification.invitation_id)
+                if invitation and invitation.get("invited_user_id") == user["user_id"]:
+                    filtered_notifications.append(notification)
+        else:
+            # Para otros tipos de notificaciones, incluirlas sin filtro adicional
+            filtered_notifications.append(notification)
+
+    logger.info(f"Notificaciones filtradas: {len(filtered_notifications)}")
+
+    if not filtered_notifications:
+        logger.info("No hay notificaciones para este usuario después del filtrado.")
         return create_response("success", "No hay notificaciones para este usuario.", data=[])
 
     # Serializar las notificaciones
@@ -56,7 +75,7 @@ def get_notifications(session_token: str, db: Session = Depends(get_db_session))
                 notification_type=notification.notification_type.name if notification.notification_type else None,
                 notification_state=notification.state.name if notification.state else None
             )
-            for notification in notifications
+            for notification in filtered_notifications
         ]
         logger.info(f"Notificaciones serializadas correctamente: {len(notification_responses)}")
         notification_responses_dict = [n.model_dump() for n in notification_responses]
