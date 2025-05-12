@@ -1,13 +1,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from dataBase import get_db_session
-from models.models import NotificationDevices, NotificationStates, NotificationTypes, Notifications, UserDevices
+from models.models import NotificationStates, NotificationTypes, Notifications
 from utils.response import create_response
-from utils.register_device import register_device
 from datetime import datetime
 from utils.send_fcm_notification import send_fcm_notification
 from domain.schemas import (
-    RegisterDeviceRequest,
     UpdateNotificationStateRequest,
     SendNotificationRequest,
 )
@@ -47,24 +45,10 @@ def get_all_notifications(db: Session = Depends(get_db_session)):
             "notification_date": n.notification_date,
             "invitation_id": n.invitation_id,
             "notification_type_id": n.notification_type_id,
-            "notification_state_id": n.notification_state_id
+            "notification_state_id": n.notification_state_id,
+            "user_id": n.user_id
         }
         for n in notifs
-    ]
-    
-@router.get("/user-devices/{user_id}", include_in_schema=False)
-def get_user_devices(user_id: int, db: Session = Depends(get_db_session)):
-    """
-    Devuelve todos los dispositivos (fcm_token) asociados a un usuario.
-    """
-    devices = db.query(UserDevices).filter(UserDevices.user_id == user_id).all()
-    return [
-        {
-            "user_device_id": d.user_device_id,
-            "user_id": d.user_id,
-            "fcm_token": d.fcm_token
-        }
-        for d in devices
     ]
 
 @router.get("/notifications/by-invitation/{invitation_id}", include_in_schema=False)
@@ -85,21 +69,6 @@ def get_notification_by_invitation(invitation_id: int, db: Session = Depends(get
         return {"notification_id": notif.notification_id}
     else:
         return {"notification_id": None}
-
-@router.post("/register-device", include_in_schema=False)
-def register_device_endpoint(request: RegisterDeviceRequest, db: Session = Depends(get_db_session)):
-    """
-    Registra un dispositivo por FCM token (o lo retorna si ya existe).
-    """
-    device = register_device(db, request.fcm_token, request.user_id)
-    if device:
-        return create_response("success", "Dispositivo registrado/obtenido", {
-            "user_device_id": device.user_device_id,
-            "user_id": device.user_id,
-            "fcm_token": device.fcm_token
-        })
-    else:
-        return create_response("error", "No se pudo registrar/obtener el dispositivo")
 
 @router.patch("/notifications/{notification_id}/state", include_in_schema=False)
 def update_notification_state(notification_id: int, request: UpdateNotificationStateRequest, db: Session = Depends(get_db_session)):
@@ -124,60 +93,42 @@ def send_notification_endpoint(
     """
     try:
         bogota_tz = pytz.timezone("America/Bogota")
-        # Crear la notificación
+        # Crear la notificación con user_id
         new_notification = Notifications(
             message=request.message,
             notification_date=datetime.now(bogota_tz),
             invitation_id=request.invitation_id,
             notification_type_id=request.notification_type_id,
-            notification_state_id=request.notification_state_id
+            notification_state_id=request.notification_state_id,
+            user_id=request.user_id
         )
         db.add(new_notification)
-        db.flush()  # Para obtener el notification_id sin hacer commit todavía
-
-        # Obtener todos los dispositivos del usuario
-        user_devices = db.query(UserDevices).filter(UserDevices.user_id == request.user_id).all()
+        db.commit()
+        
+        # Obtener todos los dispositivos del usuario consultando al servicio de usuarios
+        user_devices = get_user_devices(request.user_id)
         
         sent_count = 0
         fcm_errors = []
         
-        # Enviar a todos los dispositivos del usuario y registrar en NotificationDevices
+        # Enviar a todos los dispositivos del usuario
         for device in user_devices:
             try:
                 if request.fcm_title and request.fcm_body:
-                    send_fcm_notification(device.fcm_token, request.fcm_title, request.fcm_body)
-                
-                # Registrar la relación entre notificación y dispositivo
-                notification_device = NotificationDevices(
-                    notification_id=new_notification.notification_id,
-                    user_device_id=device.user_device_id
-                )
-                db.add(notification_device)
+                    send_fcm_notification(device["fcm_token"], request.fcm_title, request.fcm_body)
                 sent_count += 1
             except Exception as device_error:
-                fcm_errors.append(f"Error enviando a dispositivo {device.user_device_id}: {str(device_error)}")
+                fcm_errors.append(f"Error enviando a dispositivo: {str(device_error)}")
                 logger.error(f"Error enviando FCM: {str(device_error)}")
         
-        # Si se proporcionó un token específico adicional que no pertenece al usuario
+        # Si se proporcionó un token específico adicional
         if request.fcm_token and request.fcm_title and request.fcm_body:
-            specific_device = db.query(UserDevices).filter(UserDevices.fcm_token == request.fcm_token).first()
-            if specific_device:
-                # Verificar si ya enviamos a este dispositivo 
-                if specific_device.user_id != request.user_id:
-                    try:
-                        send_fcm_notification(request.fcm_token, request.fcm_title, request.fcm_body)
-                        # Registrar la relación
-                        notification_device = NotificationDevices(
-                            notification_id=new_notification.notification_id,
-                            user_device_id=specific_device.user_device_id
-                        )
-                        db.add(notification_device)
-                        sent_count += 1
-                    except Exception as e:
-                        fcm_errors.append(f"Error enviando a token específico: {str(e)}")
-                        logger.error(f"Error enviando FCM a token específico: {str(e)}")
-        
-        db.commit()
+            try:
+                send_fcm_notification(request.fcm_token, request.fcm_title, request.fcm_body)
+                sent_count += 1
+            except Exception as e:
+                fcm_errors.append(f"Error enviando a token específico: {str(e)}")
+                logger.error(f"Error enviando FCM a token específico: {str(e)}")
 
         response_data = {
             "notification_id": new_notification.notification_id,

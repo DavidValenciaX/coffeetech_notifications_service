@@ -16,10 +16,6 @@ class NotificationResponse(BaseModel):
             datetime: lambda v: v.isoformat()
         }
 
-class RegisterDeviceRequest(BaseModel):
-    fcm_token: str
-    user_id: Optional[int] = None
-
 class UpdateNotificationStateRequest(BaseModel):
     notification_state_id: int
 

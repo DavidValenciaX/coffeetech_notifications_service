@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -27,33 +27,7 @@ class Notifications(Base):
     invitation_id = Column(Integer, nullable=False)
     notification_type_id = Column(Integer, ForeignKey('notification_types.notification_type_id', ondelete="CASCADE"), nullable=False)
     notification_state_id = Column(Integer, ForeignKey('notification_states.notification_state_id'), nullable=False)
+    user_id = Column(Integer, nullable=False)
 
     notification_type = relationship("NotificationTypes")
     state = relationship("NotificationStates")
-    devices = relationship("NotificationDevices", back_populates="notification", cascade="all, delete-orphan")
-
-# User Devices
-class UserDevices(Base):
-    __tablename__ = 'user_devices'
-    user_device_id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, nullable=False)
-    fcm_token = Column(String(255), nullable=False) 
-    devices = relationship("NotificationDevices", back_populates="user_device", cascade="all, delete-orphan")
-
-    __table_args__ = (
-        UniqueConstraint('user_id', 'fcm_token', name='uq_user_fcm_token'),
-    )
-
-# Notification Devices
-class NotificationDevices(Base):
-    __tablename__ = 'notification_devices'
-    notification_device_id = Column(Integer, primary_key=True)
-    notification_id = Column(Integer, ForeignKey('notifications.notification_id', ondelete="CASCADE"), nullable=False)
-    user_device_id = Column(Integer, ForeignKey('user_devices.user_device_id', ondelete="CASCADE"), nullable=False)
-
-    notification = relationship("Notifications", back_populates="devices")
-    user_device = relationship("UserDevices", back_populates="devices")
-
-    __table_args__ = (
-        UniqueConstraint('notification_id', 'user_device_id', name='uq_notification_user_device'),
-    )
