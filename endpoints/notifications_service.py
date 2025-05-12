@@ -5,6 +5,7 @@ from models.models import NotificationStates, NotificationTypes, Notifications
 from utils.response import create_response
 from datetime import datetime
 from utils.send_fcm_notification import send_fcm_notification
+from adapters.user_client import get_user_devices_by_user_id
 from domain.schemas import (
     UpdateNotificationStateRequest,
     SendNotificationRequest,
@@ -106,13 +107,13 @@ def send_notification_endpoint(
         db.commit()
         
         # Obtener todos los dispositivos del usuario consultando al servicio de usuarios
-        user_devices = get_user_devices(request.user_id)
+        user_devices = get_user_devices_by_user_id(request.user_id)
         
         sent_count = 0
         fcm_errors = []
         
         # Enviar a todos los dispositivos del usuario
-        for device in user_devices:
+        for device in user_devices or []:
             try:
                 if request.fcm_title and request.fcm_body:
                     send_fcm_notification(device["fcm_token"], request.fcm_title, request.fcm_body)

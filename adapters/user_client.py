@@ -1,4 +1,4 @@
-from typing import Optional, Any, Dict, Union
+from typing import Optional, Any, Dict, Union, List
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import logging
@@ -32,3 +32,29 @@ def verify_session_token(session_token: str) -> Optional[Union[Dict[str, Any], U
     except Exception as e:
         logger.error(f"Error al verificar el token de sesión: {e}")
     return None
+
+def get_user_devices_by_user_id(user_id: int) -> List[Dict[str, Any]]:
+    """
+    Obtiene la lista de dispositivos del usuario desde el servicio de usuarios.
+    
+    Args:
+        user_id (int): ID del usuario
+        
+    Returns:
+        List[Dict[str, Any]]: Lista de dispositivos con user_device_id, user_id y fcm_token
+    """
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(f"{USER_SERVICE_URL}/users-service/users/{user_id}/devices")
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("status") == "success" and "data" in data:
+                    return data["data"]
+                else:
+                    logger.warning(f"Respuesta inesperada al obtener dispositivos: {response.text}")
+            else:
+                logger.warning(f"Error al obtener dispositivos del usuario {user_id}: {response.status_code} - {response.text}")
+    except Exception as e:
+        logger.error(f"Error al conectarse al servicio de usuarios para obtener dispositivos: {e}")
+    
+    return []
