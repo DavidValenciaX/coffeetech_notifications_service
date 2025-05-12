@@ -1,18 +1,18 @@
 import os
-import firebase_admin
-from firebase_admin import credentials, messaging
 import logging
+import firebase_admin
+from firebase_admin import credentials, messaging, exceptions
 
-# Ruta al archivo de credenciales
-service_account_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'serviceAccountKey.json')
-
-# Inicializar Firebase con el archivo de credenciales
-if not firebase_admin._apps:
-    cred = credentials.Certificate(service_account_path)
-    firebase_admin.initialize_app(cred)
-
-# Configurar logger
 logger = logging.getLogger(__name__)
+
+SERVICE_ACCOUNT = os.path.join(
+    os.path.dirname(__file__),  # carpeta donde está este .py
+    'serviceAccountKey.json'
+)
+
+if not firebase_admin._apps:
+    cred = credentials.Certificate(SERVICE_ACCOUNT)
+    firebase_admin.initialize_app(cred)
 
 def send_fcm_notification(fcm_token: str, title: str, body: str):
     """
@@ -28,16 +28,16 @@ def send_fcm_notification(fcm_token: str, title: str, body: str):
     """
     # Construir el mensaje
     message = messaging.Message(
-        notification=messaging.Notification(
-            title=title,
-            body=body,
-        ),
+        notification=messaging.Notification(title=title, body=body),
         token=fcm_token,
     )
-
-    # Enviar la notificación
     try:
-        response = messaging.send(message)
-        logger.info('Notificación enviada correctamente: %s', response)
+        response = messaging.send(message, timeout=10)  # seconds
+        logger.info("Notificación enviada. ID de mensaje: %s", response)
+        return response
+    except exceptions.InvalidArgumentError as e:
+        logger.error("Token inválido o formato incorrecto: %s", e)
+    except exceptions.UnauthenticatedError as e:
+        logger.error("Credenciales no válidas / API FCM deshabilitada: %s", e)
     except Exception as e:
-        logger.error('Error enviando la notificación: %s', str(e))
+        logger.exception("Error inesperado enviando notificación: %s", e)
