@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from dataBase import get_db_session
 import logging
-from use_cases.get_notifications_use_case import get_notifications, NotificationResponse
+from use_cases.get_notifications_use_case import get_notifications
 
 logger = logging.getLogger(__name__)
 
