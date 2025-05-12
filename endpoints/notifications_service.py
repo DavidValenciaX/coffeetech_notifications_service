@@ -90,7 +90,8 @@ def send_notification_endpoint(
 ):
     """
     Endpoint para enviar una notificación.
-    Envía la notificación a todos los dispositivos del usuario especificado.
+    Guarda la notificación en la base de datos y envía una notificación FCM
+    a todos los dispositivos del usuario recuperados del servicio de usuarios.
     """
     try:
         bogota_tz = pytz.timezone("America/Bogota")
@@ -109,15 +110,23 @@ def send_notification_endpoint(
         # Obtener todos los dispositivos del usuario consultando al servicio de usuarios
         user_devices = get_user_devices_by_user_id(request.user_id)
         
+        if not user_devices:
+            logger.info(f"Usuario {request.user_id} no tiene dispositivos registrados para notificaciones FCM")
+            return create_response(
+                "success", 
+                "Notificación guardada, pero el usuario no tiene dispositivos registrados", 
+                {"notification_id": new_notification.notification_id, "devices_notified": 0}
+            )
+        
         sent_count = 0
         fcm_errors = []
         
         # Enviar a todos los dispositivos del usuario
-        for device in user_devices or []:
+        for device in user_devices:
             try:
                 if request.fcm_title and request.fcm_body:
                     send_fcm_notification(device["fcm_token"], request.fcm_title, request.fcm_body)
-                sent_count += 1
+                    sent_count += 1
             except Exception as device_error:
                 fcm_errors.append(f"Error enviando a dispositivo: {str(device_error)}")
                 logger.error(f"Error enviando FCM: {str(device_error)}")
