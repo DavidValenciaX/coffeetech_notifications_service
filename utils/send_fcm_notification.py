@@ -32,7 +32,7 @@ def send_fcm_notification(fcm_token: str, title: str, body: str):
         token=fcm_token,
     )
     try:
-        response = messaging.send(message, timeout=10)  # seconds
+        response = messaging.send(message)
         logger.info("Notificación enviada. ID de mensaje: %s", response)
         return response
     except exceptions.InvalidArgumentError as e:
