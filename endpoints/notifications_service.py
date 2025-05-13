@@ -6,6 +6,7 @@ from utils.response import create_response
 from datetime import datetime
 from utils.send_fcm_notification import send_fcm_notification
 from adapters.user_client import get_user_devices_by_user_id
+from firebase_admin._messaging_utils import SenderIdMismatchError
 from domain.schemas import (
     UpdateNotificationStateRequest,
     SendNotificationRequest,
@@ -120,31 +121,79 @@ def send_notification_endpoint(
         
         sent_count = 0
         fcm_errors = []
+        invalid_tokens = []
         
         # Enviar a todos los dispositivos del usuario
         for device in user_devices:
             try:
                 if request.fcm_title and request.fcm_body:
-                    send_fcm_notification(device["fcm_token"], request.fcm_title, request.fcm_body)
-                    sent_count += 1
+                    response = send_fcm_notification(device["fcm_token"], request.fcm_title, request.fcm_body)
+                    if isinstance(response, dict) and response.get("success"):
+                        sent_count += 1
+                    elif isinstance(response, dict) and response.get("should_delete_token"):
+                        # Token inválido que debe ser eliminado
+                        invalid_tokens.append(device["fcm_token"])
+                        fcm_errors.append({
+                            "token": device["fcm_token"],
+                            "error_type": response.get("error_type"),
+                            "error_message": response.get("error_message")
+                        })
+            except SenderIdMismatchError:
+                # Este error ya está registrado y el token debe ser eliminado
+                invalid_tokens.append(device["fcm_token"])
+                fcm_errors.append({
+                    "token": device["fcm_token"],
+                    "error_type": "sender_id_mismatch",
+                    "error_message": "Token pertenece a un proyecto FCM diferente"
+                })
             except Exception as device_error:
-                fcm_errors.append(f"Error enviando a dispositivo: {str(device_error)}")
+                fcm_errors.append({
+                    "token": device["fcm_token"],
+                    "error_type": "unknown",
+                    "error_message": str(device_error)
+                })
                 logger.error(f"Error enviando FCM: {str(device_error)}")
         
         # Si se proporcionó un token específico adicional
         if request.fcm_token and request.fcm_title and request.fcm_body:
             try:
-                send_fcm_notification(request.fcm_token, request.fcm_title, request.fcm_body)
-                sent_count += 1
+                response = send_fcm_notification(request.fcm_token, request.fcm_title, request.fcm_body)
+                if isinstance(response, dict) and response.get("success"):
+                    sent_count += 1
+                elif isinstance(response, dict) and response.get("should_delete_token"):
+                    invalid_tokens.append(request.fcm_token)
+            except SenderIdMismatchError:
+                # Este error ya está registrado y el token debe ser eliminado
+                invalid_tokens.append(request.fcm_token)
+                fcm_errors.append({
+                    "token": request.fcm_token,
+                    "error_type": "sender_id_mismatch",
+                    "error_message": "Token pertenece a un proyecto FCM diferente"
+                })
             except Exception as e:
-                fcm_errors.append(f"Error enviando a token específico: {str(e)}")
+                fcm_errors.append({
+                    "token": request.fcm_token,
+                    "error_type": "unknown",
+                    "error_message": str(e)
+                })
                 logger.error(f"Error enviando FCM a token específico: {str(e)}")
+
+        # Registrar y reportar tokens inválidos
+        if invalid_tokens:
+            # Aquí se podría implementar una llamada al servicio de usuarios
+            # para eliminar los tokens inválidos
+            logger.warning(f"Tokens FCM inválidos detectados: {invalid_tokens}")
+            # TODO: Implementar eliminación de tokens inválidos
+            # delete_invalid_tokens(invalid_tokens)
 
         response_data = {
             "notification_id": new_notification.notification_id,
             "devices_notified": sent_count
         }
         
+        if invalid_tokens:
+            response_data["invalid_tokens"] = invalid_tokens
+            
         if fcm_errors:
             response_data["fcm_errors"] = fcm_errors
 
