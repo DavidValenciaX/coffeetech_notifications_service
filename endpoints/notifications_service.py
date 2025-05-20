@@ -72,6 +72,44 @@ def get_notification_by_invitation(invitation_id: int, db: Session = Depends(get
     else:
         return {"notification_id": None}
 
+@router.delete("/notifications/by-invitation/{invitation_id}", include_in_schema=False)
+def delete_notifications_by_invitation(invitation_id: int, db: Session = Depends(get_db_session)):
+    """
+    Elimina todas las notificaciones de tipo 'Invitation' asociadas a una invitación.
+    """
+    try:
+        invitation_notification_type = db.query(NotificationTypes).filter(
+            NotificationTypes.name == "Invitation" 
+        ).first()
+
+        if not invitation_notification_type:
+            logger.warning("Tipo de notificación 'Invitation' no encontrado en la base de datos. No se pueden eliminar notificaciones específicas.")
+            # If the type doesn't exist, no such notifications can be deleted.
+            return create_response("success", "Tipo de notificación 'Invitation' no configurado. No se eliminaron notificaciones.", {"deleted_count": 0}, status_code=200)
+
+        notifications_to_delete = db.query(Notifications).filter(
+            Notifications.invitation_id == invitation_id,
+            Notifications.notification_type_id == invitation_notification_type.notification_type_id
+        ).all()
+
+        if not notifications_to_delete:
+            logger.info(f"No se encontraron notificaciones de tipo 'Invitation' para eliminar para invitation_id {invitation_id}.")
+            return create_response("success", "No se encontraron notificaciones para eliminar.", {"deleted_count": 0}, status_code=200)
+
+        deleted_count = 0
+        for notif in notifications_to_delete:
+            db.delete(notif)
+            deleted_count += 1
+        
+        db.commit()
+        logger.info(f"{deleted_count} notificaciones de tipo 'Invitation' eliminadas para invitation_id {invitation_id}.")
+        return create_response("success", f"{deleted_count} notificaciones eliminadas exitosamente.", {"deleted_count": deleted_count}, status_code=200)
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error eliminando notificaciones por invitation_id {invitation_id}: {str(e)}")
+        return create_response("error", f"Error interno del servidor al eliminar notificaciones: {str(e)}", status_code=500)
+
 @router.patch("/notifications/{notification_id}/state", include_in_schema=False)
 def update_notification_state(notification_id: int, request: UpdateNotificationStateRequest, db: Session = Depends(get_db_session)):
     """
