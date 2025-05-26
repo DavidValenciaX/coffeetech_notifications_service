@@ -1,6 +1,6 @@
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Patch sqlalchemy.create_engine before other project imports
 _patch_create_engine = patch('sqlalchemy.create_engine', return_value=MagicMock())
@@ -49,7 +49,7 @@ def test_get_notifications_valid_token_with_notifications(mock_create_response, 
     mock_user = {'user_id': 1, 'name': 'Test User'}
     mock_verify_session_token.return_value = mock_user
 
-    mock_notif1_date = datetime.utcnow()
+    mock_notif1_date = datetime.now(timezone.utc)
     mock_notif1 = MagicMock(spec=Notifications)
     mock_notif1.notification_id = 1
     mock_notif1.message = "Test message 1"
@@ -123,7 +123,7 @@ def test_get_notifications_serialization_error(mock_create_response, mock_verify
     mock_user = {'user_id': 1, 'name': 'Test User'}
     mock_verify_session_token.return_value = mock_user
 
-    mock_notif_broken_date = datetime.utcnow()
+    mock_notif_broken_date = datetime.now(timezone.utc)
     mock_notif_broken = MagicMock(spec=Notifications) 
     mock_notif_broken.notification_id = 1
     mock_notif_broken.message = "Test message broken"
