@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 import logging
 from domain.repositories.notification_repository import NotificationRepositoryInterface
 from domain.schemas import NotificationResponse
-from adapters.user_client import verify_session_token
+from adapters.http.user_service_adapter import verify_session_token
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ from models.models import NotificationStates, NotificationTypes, Notifications
 from utils.response import create_response
 from datetime import datetime
 from utils.send_fcm_notification import send_fcm_notification
-from adapters.user_client import get_user_devices_by_user_id
+from adapters.http.user_service_adapter import get_user_devices_by_user_id
 from firebase_admin._messaging_utils import SenderIdMismatchError
 from domain.schemas import (
     UpdateNotificationStateRequest,

@@ -57,4 +57,4 @@ def get_user_devices_by_user_id(user_id: int) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error al conectarse al servicio de usuarios para obtener dispositivos: {e}")
     
-    return []
+    return [] 
