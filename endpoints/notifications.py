@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from dataBase import get_db_session
 import logging
 from use_cases.get_notifications_use_case import GetNotificationsUseCase
+from domain.services.notification_service import NotificationService
+from adapters.persistence.notification_repository import NotificationRepository
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +69,9 @@ def get_notifications_endpoint(session_token: str, db: Session = Depends(get_db_
     Retorna:
     - Respuesta con las notificaciones del usuario.
     """
-    # Create and execute the use case
-    use_case = GetNotificationsUseCase(db)
+    # Create dependencies: Repository -> Service -> Use Case
+    notification_repository = NotificationRepository(db)
+    notification_service = NotificationService(notification_repository)
+    use_case = GetNotificationsUseCase(notification_service)
+    
     return use_case.execute(session_token)

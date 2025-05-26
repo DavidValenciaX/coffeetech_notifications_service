@@ -7,6 +7,8 @@ _patch_create_engine = patch('sqlalchemy.create_engine', return_value=MagicMock(
 _patch_create_engine.start()
 
 from use_cases.get_notifications_use_case import GetNotificationsUseCase
+from domain.services.notification_service import NotificationService
+from adapters.persistence.notification_repository import NotificationRepository
 from models.models import Notifications # This is the actual SQLAlchemy model
 from domain.schemas import NotificationResponse # For checking response structure
 
@@ -28,49 +30,45 @@ def mock_notification_state():
     mock_state.name = "TestState"
     return mock_state
 
+@pytest.fixture
+def mock_notification_service():
+    """Create a mock notification service for testing"""
+    return MagicMock(spec=NotificationService)
+
 # Test for invalid session token
 @patch('domain.services.notification_service.verify_session_token')
 @patch('use_cases.get_notifications_use_case.session_token_invalid_response')
-def test_get_notifications_invalid_token(mock_session_token_invalid_response, mock_verify_session_token, mock_db_session):
-    mock_verify_session_token.return_value = None
+def test_get_notifications_invalid_token(mock_session_token_invalid_response, mock_verify_session_token, mock_notification_service):
+    mock_notification_service.authenticate_user.return_value = None
     expected_response = {"status": "error", "message": "Token inválido"}
     mock_session_token_invalid_response.return_value = expected_response
 
-    use_case = GetNotificationsUseCase(mock_db_session)
+    use_case = GetNotificationsUseCase(mock_notification_service)
     result = use_case.execute("invalid_token")
 
-    mock_verify_session_token.assert_called_once_with("invalid_token")
+    mock_notification_service.authenticate_user.assert_called_once_with("invalid_token")
     mock_session_token_invalid_response.assert_called_once()
     assert result == expected_response
 
 # Test for valid token, user has notifications
-@patch('domain.services.notification_service.verify_session_token')
 @patch('use_cases.get_notifications_use_case.create_response')
-def test_get_notifications_valid_token_with_notifications(mock_create_response, mock_verify_session_token, mock_db_session, mock_notification_type, mock_notification_state):
+def test_get_notifications_valid_token_with_notifications(mock_create_response, mock_notification_service, mock_notification_type, mock_notification_state):
     mock_user = {'user_id': 1, 'name': 'Test User'}
-    mock_verify_session_token.return_value = mock_user
+    mock_notification_service.authenticate_user.return_value = mock_user
 
     mock_notif1_date = datetime.now(timezone.utc)
-    mock_notif1 = MagicMock(spec=Notifications)
-    mock_notif1.notification_id = 1
-    mock_notif1.message = "Test message 1"
-    mock_notif1.notification_date = mock_notif1_date 
-    mock_notif1.invitation_id = 101
-    mock_notif1.notification_type = mock_notification_type 
-    mock_notif1.state = mock_notification_state 
+    mock_notification_response = NotificationResponse(
+        notification_id=1,
+        message="Test message 1",
+        notification_date=mock_notif1_date, 
+        invitation_id=101,
+        notification_type="TestType",
+        notification_state="TestState"
+    )
     
-    mock_db_session.query.return_value.filter.return_value.all.return_value = [mock_notif1]
+    mock_notification_service.get_user_notifications.return_value = [mock_notification_response]
     
-    expected_data = [
-        NotificationResponse(
-            notification_id=1,
-            message="Test message 1",
-            notification_date=mock_notif1_date, 
-            invitation_id=101,
-            notification_type="TestType",
-            notification_state="TestState"
-        ).model_dump()
-    ]
+    expected_data = [mock_notification_response.model_dump()]
     
     # Consistent with the prompt's example for this test case for create_response call
     expected_message = "Notificaciones obtenidas exitosamente."
@@ -78,11 +76,11 @@ def test_get_notifications_valid_token_with_notifications(mock_create_response, 
     # Set the return value for the mock_create_response
     mock_create_response.return_value = expected_response_dict
 
-    use_case = GetNotificationsUseCase(mock_db_session)
+    use_case = GetNotificationsUseCase(mock_notification_service)
     result = use_case.execute("valid_token")
 
-    mock_verify_session_token.assert_called_once_with("valid_token")
-    mock_db_session.query.assert_called_once_with(Notifications)
+    mock_notification_service.authenticate_user.assert_called_once_with("valid_token")
+    mock_notification_service.get_user_notifications.assert_called_once_with(1)
     mock_create_response.assert_called_once_with(
         "success", 
         expected_message, 
@@ -91,13 +89,11 @@ def test_get_notifications_valid_token_with_notifications(mock_create_response, 
     assert result == expected_response_dict
 
 # Test for valid token, user has no notifications
-@patch('domain.services.notification_service.verify_session_token')
 @patch('use_cases.get_notifications_use_case.create_response')
-def test_get_notifications_valid_token_no_notifications(mock_create_response, mock_verify_session_token, mock_db_session):
+def test_get_notifications_valid_token_no_notifications(mock_create_response, mock_notification_service):
     mock_user = {'user_id': 1, 'name': 'Test User'}
-    mock_verify_session_token.return_value = mock_user
-
-    mock_db_session.query.return_value.filter.return_value.all.return_value = []
+    mock_notification_service.authenticate_user.return_value = mock_user
+    mock_notification_service.get_user_notifications.return_value = []
     
     # Consistent with the prompt's example for this test case
     expected_message = "No hay notificaciones para este usuario."
@@ -105,11 +101,11 @@ def test_get_notifications_valid_token_no_notifications(mock_create_response, mo
     expected_response_dict = {"status": "success", "message": expected_message, "data": []}
     mock_create_response.return_value = expected_response_dict
 
-    use_case = GetNotificationsUseCase(mock_db_session)
+    use_case = GetNotificationsUseCase(mock_notification_service)
     result = use_case.execute("valid_token")
 
-    mock_verify_session_token.assert_called_once_with("valid_token")
-    mock_db_session.query.assert_called_once_with(Notifications)
+    mock_notification_service.authenticate_user.assert_called_once_with("valid_token")
+    mock_notification_service.get_user_notifications.assert_called_once_with(1)
     mock_create_response.assert_called_once_with(
         "success", 
         expected_message, 
@@ -118,35 +114,24 @@ def test_get_notifications_valid_token_no_notifications(mock_create_response, mo
     assert result == expected_response_dict
 
 # Test for valid token, serialization error
-@patch('domain.services.notification_service.verify_session_token')
 @patch('use_cases.get_notifications_use_case.create_response')
-def test_get_notifications_serialization_error(mock_create_response, mock_verify_session_token, mock_db_session, mock_notification_state):
+def test_get_notifications_serialization_error(mock_create_response, mock_notification_service):
     mock_user = {'user_id': 1, 'name': 'Test User'}
-    mock_verify_session_token.return_value = mock_user
+    mock_notification_service.authenticate_user.return_value = mock_user
 
-    mock_notif_broken_date = datetime.now(timezone.utc)
-    mock_notif_broken = MagicMock(spec=Notifications) 
-    mock_notif_broken.notification_id = 1
-    mock_notif_broken.message = "Test message broken"
-    mock_notif_broken.notification_date = mock_notif_broken_date 
-    mock_notif_broken.invitation_id = 101
-    
-    mock_notif_broken.notification_type = FaultyType() # This will raise AttributeError("Simulated error") on .name access
-    mock_notif_broken.state = mock_notification_state 
-
-    mock_db_session.query.return_value.filter.return_value.all.return_value = [mock_notif_broken]
+    # Simulate an exception being raised by the service
+    mock_notification_service.get_user_notifications.side_effect = Exception("Simulated error")
     
     # As per prompt's example for assert_called_once_with for this test case
-    # This implies the use case formats the message as "Error de serialización: {exception_message}"
-    expected_message = "Error de serialización: Simulated error"
+    expected_message = "Simulated error"
     expected_response_dict = {"status": "error", "message": expected_message, "data":[]}
     mock_create_response.return_value = expected_response_dict
 
-    use_case = GetNotificationsUseCase(mock_db_session)
+    use_case = GetNotificationsUseCase(mock_notification_service)
     result = use_case.execute("valid_token")
 
-    mock_verify_session_token.assert_called_once_with("valid_token")
-    mock_db_session.query.assert_called_once_with(Notifications)
+    mock_notification_service.authenticate_user.assert_called_once_with("valid_token")
+    mock_notification_service.get_user_notifications.assert_called_once_with(1)
     mock_create_response.assert_called_once_with(
         "error", 
         expected_message, 

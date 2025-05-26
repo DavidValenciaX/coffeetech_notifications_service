@@ -1,8 +1,6 @@
 from typing import Dict, Any
 import logging
-from sqlalchemy.orm import Session
 from domain.services.notification_service import NotificationService
-from adapters.persistence.notification_repository import NotificationRepository
 from utils.response import create_response, session_token_invalid_response
 
 logger = logging.getLogger(__name__)
@@ -11,9 +9,8 @@ logger = logging.getLogger(__name__)
 class GetNotificationsUseCase:
     """Use case for getting user notifications"""
     
-    def __init__(self, db: Session):
-        self.notification_repository = NotificationRepository(db)
-        self.notification_service = NotificationService(self.notification_repository)
+    def __init__(self, notification_service: NotificationService):
+        self.notification_service = notification_service
     
     def execute(self, session_token: str) -> Dict[str, Any]:
         """Execute the get notifications use case"""
