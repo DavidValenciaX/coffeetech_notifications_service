@@ -122,6 +122,73 @@ def update_notification_state(notification_id: int, request: UpdateNotificationS
     db.commit()
     return create_response("success", "Estado de notificación actualizado")
 
+def _create_notification_record(request: SendNotificationRequest, db: Session) -> Notifications:
+    """Crea y guarda un registro de notificación en la base de datos."""
+    bogota_tz = pytz.timezone("America/Bogota")
+    new_notification = Notifications(
+        message=request.message,
+        notification_date=datetime.now(bogota_tz),
+        invitation_id=request.invitation_id,
+        notification_type_id=request.notification_type_id,
+        notification_state_id=request.notification_state_id,
+        user_id=request.user_id
+    )
+    db.add(new_notification)
+    db.commit()
+    return new_notification
+
+def _send_fcm_to_token(token: str, title: str, body: str, fcm_errors: list, invalid_tokens: list) -> bool:
+    """Envía FCM a un token específico y maneja errores. Retorna True si fue exitoso."""
+    try:
+        response = send_fcm_notification(token, title, body)
+        if isinstance(response, dict) and response.get("success"):
+            return True
+        elif isinstance(response, dict) and response.get("should_delete_token"):
+            invalid_tokens.append(token)
+            fcm_errors.append({
+                "token": token,
+                "error_type": response.get("error_type"),
+                "error_message": response.get("error_message")
+            })
+    except SenderIdMismatchError:
+        invalid_tokens.append(token)
+        fcm_errors.append({
+            "token": token,
+            "error_type": "sender_id_mismatch",
+            "error_message": "Token pertenece a un proyecto FCM diferente"
+        })
+    except Exception as e:
+        fcm_errors.append({
+            "token": token,
+            "error_type": "unknown",
+            "error_message": str(e)
+        })
+        logger.error(f"Error enviando FCM: {str(e)}")
+    return False
+
+def _send_fcm_to_devices(request: SendNotificationRequest, user_devices: list, fcm_errors: list, invalid_tokens: list) -> int:
+    """Envía FCM a todos los dispositivos del usuario. Retorna el número de envíos exitosos."""
+    sent_count = 0
+    if not (request.fcm_title and request.fcm_body):
+        return sent_count
+        
+    for device in user_devices:
+        if _send_fcm_to_token(device["fcm_token"], request.fcm_title, request.fcm_body, fcm_errors, invalid_tokens):
+            sent_count += 1
+    return sent_count
+
+def _build_response_data(notification_id: int, sent_count: int, invalid_tokens: list, fcm_errors: list) -> dict:
+    """Construye los datos de respuesta."""
+    response_data = {
+        "notification_id": notification_id,
+        "devices_notified": sent_count
+    }
+    if invalid_tokens:
+        response_data["invalid_tokens"] = invalid_tokens
+    if fcm_errors:
+        response_data["fcm_errors"] = fcm_errors
+    return response_data
+
 @router.post("/send-notification", include_in_schema=False)
 def send_notification_endpoint(
     request: SendNotificationRequest,
@@ -133,20 +200,7 @@ def send_notification_endpoint(
     a todos los dispositivos del usuario recuperados del servicio de usuarios.
     """
     try:
-        bogota_tz = pytz.timezone("America/Bogota")
-        # Crear la notificación con user_id
-        new_notification = Notifications(
-            message=request.message,
-            notification_date=datetime.now(bogota_tz),
-            invitation_id=request.invitation_id,
-            notification_type_id=request.notification_type_id,
-            notification_state_id=request.notification_state_id,
-            user_id=request.user_id
-        )
-        db.add(new_notification)
-        db.commit()
-        
-        # Obtener todos los dispositivos del usuario consultando al servicio de usuarios
+        new_notification = _create_notification_record(request, db)
         user_devices = get_user_devices_by_user_id(request.user_id)
         
         if not user_devices:
@@ -157,85 +211,24 @@ def send_notification_endpoint(
                 {"notification_id": new_notification.notification_id, "devices_notified": 0}
             )
         
-        sent_count = 0
         fcm_errors = []
         invalid_tokens = []
         
         # Enviar a todos los dispositivos del usuario
-        for device in user_devices:
-            try:
-                if request.fcm_title and request.fcm_body:
-                    response = send_fcm_notification(device["fcm_token"], request.fcm_title, request.fcm_body)
-                    if isinstance(response, dict) and response.get("success"):
-                        sent_count += 1
-                    elif isinstance(response, dict) and response.get("should_delete_token"):
-                        # Token inválido que debe ser eliminado
-                        invalid_tokens.append(device["fcm_token"])
-                        fcm_errors.append({
-                            "token": device["fcm_token"],
-                            "error_type": response.get("error_type"),
-                            "error_message": response.get("error_message")
-                        })
-            except SenderIdMismatchError:
-                # Este error ya está registrado y el token debe ser eliminado
-                invalid_tokens.append(device["fcm_token"])
-                fcm_errors.append({
-                    "token": device["fcm_token"],
-                    "error_type": "sender_id_mismatch",
-                    "error_message": "Token pertenece a un proyecto FCM diferente"
-                })
-            except Exception as device_error:
-                fcm_errors.append({
-                    "token": device["fcm_token"],
-                    "error_type": "unknown",
-                    "error_message": str(device_error)
-                })
-                logger.error(f"Error enviando FCM: {str(device_error)}")
+        sent_count = _send_fcm_to_devices(request, user_devices, fcm_errors, invalid_tokens)
         
         # Si se proporcionó un token específico adicional
         if request.fcm_token and request.fcm_title and request.fcm_body:
-            try:
-                response = send_fcm_notification(request.fcm_token, request.fcm_title, request.fcm_body)
-                if isinstance(response, dict) and response.get("success"):
-                    sent_count += 1
-                elif isinstance(response, dict) and response.get("should_delete_token"):
-                    invalid_tokens.append(request.fcm_token)
-            except SenderIdMismatchError:
-                # Este error ya está registrado y el token debe ser eliminado
-                invalid_tokens.append(request.fcm_token)
-                fcm_errors.append({
-                    "token": request.fcm_token,
-                    "error_type": "sender_id_mismatch",
-                    "error_message": "Token pertenece a un proyecto FCM diferente"
-                })
-            except Exception as e:
-                fcm_errors.append({
-                    "token": request.fcm_token,
-                    "error_type": "unknown",
-                    "error_message": str(e)
-                })
-                logger.error(f"Error enviando FCM a token específico: {str(e)}")
+            if _send_fcm_to_token(request.fcm_token, request.fcm_title, request.fcm_body, fcm_errors, invalid_tokens):
+                sent_count += 1
 
-        # Registrar y reportar tokens inválidos
+        # Registrar tokens inválidos
         if invalid_tokens:
-            # Aquí se podría implementar una llamada al servicio de usuarios
-            # para eliminar los tokens inválidos
             logger.warning(f"Tokens FCM inválidos detectados: {invalid_tokens}")
-            # TODO: Implementar eliminación de tokens inválidos
-            # delete_invalid_tokens(invalid_tokens)
 
-        response_data = {
-            "notification_id": new_notification.notification_id,
-            "devices_notified": sent_count
-        }
-        
-        if invalid_tokens:
-            response_data["invalid_tokens"] = invalid_tokens
-            
-        if fcm_errors:
-            response_data["fcm_errors"] = fcm_errors
-
+        response_data = _build_response_data(new_notification.notification_id, sent_count, invalid_tokens, fcm_errors)
         return create_response("success", "Notificación enviada correctamente", response_data)
+        
     except Exception as e:
         db.rollback()
         logger.error(f"Error enviando notificación: {str(e)}")

@@ -8,8 +8,6 @@ _patch_create_engine.start()
 
 from use_cases.get_notifications_use_case import GetNotificationsUseCase
 from domain.services.notification_service import NotificationService
-from adapters.persistence.notification_repository import NotificationRepository
-from models.models import Notifications # This is the actual SQLAlchemy model
 from domain.schemas import NotificationResponse # For checking response structure
 
 class FaultyType:
