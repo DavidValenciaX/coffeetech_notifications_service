@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from dataBase import get_db_session
 import logging
-from use_cases.get_notifications_use_case import get_notifications
+from use_cases.get_notifications_use_case import GetNotificationsUseCase
 
 logger = logging.getLogger(__name__)
 
@@ -67,5 +67,6 @@ def get_notifications_endpoint(session_token: str, db: Session = Depends(get_db_
     Retorna:
     - Respuesta con las notificaciones del usuario.
     """
-    # Verificar el session_token y obtener el usuario autenticado
-    return get_notifications(session_token, db)
+    # Create and execute the use case
+    use_case = GetNotificationsUseCase(db)
+    return use_case.execute(session_token)
