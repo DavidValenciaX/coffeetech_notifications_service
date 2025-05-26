@@ -1,198 +1,120 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from dataBase import get_db_session
-from models.models import NotificationStates, NotificationTypes, Notifications
 from utils.response import create_response
-from datetime import datetime
-from utils.send_fcm_notification import send_fcm_notification
-from adapters.http.user_service_adapter import get_user_devices_by_user_id
-from firebase_admin._messaging_utils import SenderIdMismatchError
 from domain.schemas import (
     UpdateNotificationStateRequest,
     SendNotificationRequest,
 )
+from domain.services.notification_service import NotificationService, NotificationNotFoundError
+from adapters.persistence.notification_repository import NotificationRepository
 import logging
-import pytz
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+def get_notification_service(db: Session = Depends(get_db_session)) -> NotificationService:
+    """Dependency injection for notification service"""
+    repository = NotificationRepository(db)
+    return NotificationService(repository)
+
 @router.get("/notification-states", include_in_schema=False)
-def get_notification_states(db: Session = Depends(get_db_session)):
+def get_notification_states(service: NotificationService = Depends(get_notification_service)):
     """
     Devuelve todos los estados de notificación.
     """
-    states = db.query(NotificationStates).all()
-    return [{"notification_state_id": s.notification_state_id, "name": s.name} for s in states]
+    try:
+        states = service.get_all_notification_states()
+        return [{"notification_state_id": s.notification_state_id, "name": s.name} for s in states]
+    except Exception as e:
+        logger.error(f"Error obteniendo estados de notificación: {str(e)}")
+        return create_response("error", f"Error interno del servidor: {str(e)}", status_code=500)
 
 @router.get("/notification-types", include_in_schema=False)
-def get_notification_types(db: Session = Depends(get_db_session)):
+def get_notification_types(service: NotificationService = Depends(get_notification_service)):
     """
     Devuelve todos los tipos de notificación.
     """
-    types = db.query(NotificationTypes).all()
-    return [{"notification_type_id": t.notification_type_id, "name": t.name} for t in types]
+    try:
+        types = service.get_all_notification_types()
+        return [{"notification_type_id": t.notification_type_id, "name": t.name} for t in types]
+    except Exception as e:
+        logger.error(f"Error obteniendo tipos de notificación: {str(e)}")
+        return create_response("error", f"Error interno del servidor: {str(e)}", status_code=500)
 
 @router.get("/notifications", include_in_schema=False)
-def get_all_notifications(db: Session = Depends(get_db_session)):
+def get_all_notifications(service: NotificationService = Depends(get_notification_service)):
     """
     Devuelve todas las notificaciones.
     """
-    notifs = db.query(Notifications).all()
-    return [
-        {
-            "notification_id": n.notification_id,
-            "message": n.message,
-            "notification_date": n.notification_date,
-            "invitation_id": n.invitation_id,
-            "notification_type_id": n.notification_type_id,
-            "notification_state_id": n.notification_state_id,
-            "user_id": n.user_id
-        }
-        for n in notifs
-    ]
+    try:
+        notifications = service.get_all_notifications()
+        return [
+            {
+                "notification_id": n.notification_id,
+                "message": n.message,
+                "notification_date": n.notification_date,
+                "invitation_id": n.invitation_id,
+                "notification_type_id": n.notification_type_id,
+                "notification_state_id": n.notification_state_id,
+                "user_id": n.user_id
+            }
+            for n in notifications
+        ]
+    except Exception as e:
+        logger.error(f"Error obteniendo todas las notificaciones: {str(e)}")
+        return create_response("error", f"Error interno del servidor: {str(e)}", status_code=500)
 
 @router.get("/notifications/by-invitation/{invitation_id}", include_in_schema=False)
-def get_notification_by_invitation(invitation_id: int, db: Session = Depends(get_db_session)):
+def get_notification_by_invitation(invitation_id: int, service: NotificationService = Depends(get_notification_service)):
     """
     Devuelve el notification_id asociado a una invitación.
     """
-    
-    notification_type_id = db.query(NotificationTypes).filter(
-        NotificationTypes.name == "Invitation"
-    ).first().notification_type_id
-    
-    notif = db.query(Notifications).filter(
-        Notifications.notification_type_id == notification_type_id,
-        Notifications.invitation_id == invitation_id
-    ).first()
-    if notif:
-        return {"notification_id": notif.notification_id}
-    else:
-        return {"notification_id": None}
+    try:
+        result = service.get_notification_by_invitation(invitation_id)
+        return {"notification_id": result.notification_id}
+    except Exception as e:
+        logger.error(f"Error obteniendo notificación por invitation_id {invitation_id}: {str(e)}")
+        return create_response("error", f"Error interno del servidor: {str(e)}", status_code=500)
 
 @router.delete("/notifications/by-invitation/{invitation_id}", include_in_schema=False)
-def delete_notifications_by_invitation(invitation_id: int, db: Session = Depends(get_db_session)):
+def delete_notifications_by_invitation(invitation_id: int, service: NotificationService = Depends(get_notification_service)):
     """
     Elimina todas las notificaciones de tipo 'Invitation' asociadas a una invitación.
     """
     try:
-        invitation_notification_type = db.query(NotificationTypes).filter(
-            NotificationTypes.name == "Invitation" 
-        ).first()
-
-        if not invitation_notification_type:
-            logger.warning("Tipo de notificación 'Invitation' no encontrado en la base de datos. No se pueden eliminar notificaciones específicas.")
-            # If the type doesn't exist, no such notifications can be deleted.
-            return create_response("success", "Tipo de notificación 'Invitation' no configurado. No se eliminaron notificaciones.", {"deleted_count": 0}, status_code=200)
-
-        notifications_to_delete = db.query(Notifications).filter(
-            Notifications.invitation_id == invitation_id,
-            Notifications.notification_type_id == invitation_notification_type.notification_type_id
-        ).all()
-
-        if not notifications_to_delete:
-            logger.info(f"No se encontraron notificaciones de tipo 'Invitation' para eliminar para invitation_id {invitation_id}.")
-            return create_response("success", "No se encontraron notificaciones para eliminar.", {"deleted_count": 0}, status_code=200)
-
-        deleted_count = 0
-        for notif in notifications_to_delete:
-            db.delete(notif)
-            deleted_count += 1
+        result = service.delete_notifications_by_invitation(invitation_id)
         
-        db.commit()
-        logger.info(f"{deleted_count} notificaciones de tipo 'Invitation' eliminadas para invitation_id {invitation_id}.")
-        return create_response("success", f"{deleted_count} notificaciones eliminadas exitosamente.", {"deleted_count": deleted_count}, status_code=200)
-
+        if result.deleted_count == 0:
+            return create_response("success", "No se encontraron notificaciones para eliminar.", {"deleted_count": 0}, status_code=200)
+        
+        return create_response("success", f"{result.deleted_count} notificaciones eliminadas exitosamente.", {"deleted_count": result.deleted_count}, status_code=200)
+        
     except Exception as e:
-        db.rollback()
         logger.error(f"Error eliminando notificaciones por invitation_id {invitation_id}: {str(e)}")
         return create_response("error", f"Error interno del servidor al eliminar notificaciones: {str(e)}", status_code=500)
 
 @router.patch("/notifications/{notification_id}/state", include_in_schema=False)
-def update_notification_state(notification_id: int, request: UpdateNotificationStateRequest, db: Session = Depends(get_db_session)):
+def update_notification_state(notification_id: int, request: UpdateNotificationStateRequest, service: NotificationService = Depends(get_notification_service)):
     """
     Actualiza el estado de una notificación.
     """
-    notif = db.query(Notifications).filter(Notifications.notification_id == notification_id).first()
-    if not notif:
-        return create_response("error", "Notificación no encontrada", status_code=404)
-    notif.notification_state_id = request.notification_state_id
-    db.commit()
-    return create_response("success", "Estado de notificación actualizado")
-
-def _create_notification_record(request: SendNotificationRequest, db: Session) -> Notifications:
-    """Crea y guarda un registro de notificación en la base de datos."""
-    bogota_tz = pytz.timezone("America/Bogota")
-    new_notification = Notifications(
-        message=request.message,
-        notification_date=datetime.now(bogota_tz),
-        invitation_id=request.invitation_id,
-        notification_type_id=request.notification_type_id,
-        notification_state_id=request.notification_state_id,
-        user_id=request.user_id
-    )
-    db.add(new_notification)
-    db.commit()
-    return new_notification
-
-def _send_fcm_to_token(token: str, title: str, body: str, fcm_errors: list, invalid_tokens: list) -> bool:
-    """Envía FCM a un token específico y maneja errores. Retorna True si fue exitoso."""
     try:
-        response = send_fcm_notification(token, title, body)
-        if isinstance(response, dict) and response.get("success"):
-            return True
-        elif isinstance(response, dict) and response.get("should_delete_token"):
-            invalid_tokens.append(token)
-            fcm_errors.append({
-                "token": token,
-                "error_type": response.get("error_type"),
-                "error_message": response.get("error_message")
-            })
-    except SenderIdMismatchError:
-        invalid_tokens.append(token)
-        fcm_errors.append({
-            "token": token,
-            "error_type": "sender_id_mismatch",
-            "error_message": "Token pertenece a un proyecto FCM diferente"
-        })
+        service.update_notification_state(notification_id, request.notification_state_id)
+        return create_response("success", "Estado de notificación actualizado")
+    except NotificationNotFoundError:
+        return create_response("error", "Notificación no encontrada", status_code=404)
     except Exception as e:
-        fcm_errors.append({
-            "token": token,
-            "error_type": "unknown",
-            "error_message": str(e)
-        })
-        logger.error(f"Error enviando FCM: {str(e)}")
-    return False
+        logger.error(f"Error actualizando estado de notificación {notification_id}: {str(e)}")
+        return create_response("error", f"Error interno del servidor: {str(e)}", status_code=500)
 
-def _send_fcm_to_devices(request: SendNotificationRequest, user_devices: list, fcm_errors: list, invalid_tokens: list) -> int:
-    """Envía FCM a todos los dispositivos del usuario. Retorna el número de envíos exitosos."""
-    sent_count = 0
-    if not (request.fcm_title and request.fcm_body):
-        return sent_count
-        
-    for device in user_devices:
-        if _send_fcm_to_token(device["fcm_token"], request.fcm_title, request.fcm_body, fcm_errors, invalid_tokens):
-            sent_count += 1
-    return sent_count
 
-def _build_response_data(notification_id: int, sent_count: int, invalid_tokens: list, fcm_errors: list) -> dict:
-    """Construye los datos de respuesta."""
-    response_data = {
-        "notification_id": notification_id,
-        "devices_notified": sent_count
-    }
-    if invalid_tokens:
-        response_data["invalid_tokens"] = invalid_tokens
-    if fcm_errors:
-        response_data["fcm_errors"] = fcm_errors
-    return response_data
 
 @router.post("/send-notification", include_in_schema=False)
 def send_notification_endpoint(
     request: SendNotificationRequest,
-    db: Session = Depends(get_db_session)
+    service: NotificationService = Depends(get_notification_service)
 ):
     """
     Endpoint para enviar una notificación.
@@ -200,36 +122,30 @@ def send_notification_endpoint(
     a todos los dispositivos del usuario recuperados del servicio de usuarios.
     """
     try:
-        new_notification = _create_notification_record(request, db)
-        user_devices = get_user_devices_by_user_id(request.user_id)
+        result = service.send_notification(request)
         
-        if not user_devices:
-            logger.info(f"Usuario {request.user_id} no tiene dispositivos registrados para notificaciones FCM")
+        if result.devices_notified == 0:
             return create_response(
                 "success", 
                 "Notificación guardada, pero el usuario no tiene dispositivos registrados", 
-                {"notification_id": new_notification.notification_id, "devices_notified": 0}
+                {
+                    "notification_id": result.notification_id, 
+                    "devices_notified": 0
+                }
             )
         
-        fcm_errors = []
-        invalid_tokens = []
+        response_data = {
+            "notification_id": result.notification_id,
+            "devices_notified": result.devices_notified
+        }
         
-        # Enviar a todos los dispositivos del usuario
-        sent_count = _send_fcm_to_devices(request, user_devices, fcm_errors, invalid_tokens)
-        
-        # Si se proporcionó un token específico adicional
-        if request.fcm_token and request.fcm_title and request.fcm_body:
-            if _send_fcm_to_token(request.fcm_token, request.fcm_title, request.fcm_body, fcm_errors, invalid_tokens):
-                sent_count += 1
-
-        # Registrar tokens inválidos
-        if invalid_tokens:
-            logger.warning(f"Tokens FCM inválidos detectados: {invalid_tokens}")
-
-        response_data = _build_response_data(new_notification.notification_id, sent_count, invalid_tokens, fcm_errors)
+        if result.invalid_tokens:
+            response_data["invalid_tokens"] = result.invalid_tokens
+        if result.fcm_errors:
+            response_data["fcm_errors"] = result.fcm_errors
+            
         return create_response("success", "Notificación enviada correctamente", response_data)
         
     except Exception as e:
-        db.rollback()
         logger.error(f"Error enviando notificación: {str(e)}")
         return create_response("error", f"Error al enviar la notificación: {str(e)}", status_code=500) 
