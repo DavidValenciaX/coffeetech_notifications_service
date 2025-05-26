@@ -2,7 +2,7 @@ from typing import Dict, Any
 import logging
 from sqlalchemy.orm import Session
 from domain.services.notification_service import NotificationService
-from domain.repositories.notification_repository import NotificationRepository
+from adapters.persistence.notification_repository import NotificationRepository
 from utils.response import create_response, session_token_invalid_response
 
 logger = logging.getLogger(__name__)
