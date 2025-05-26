@@ -74,4 +74,4 @@ def get_notifications_endpoint(session_token: str, db: Session = Depends(get_db_
     notification_service = NotificationService(notification_repository)
     use_case = GetNotificationsUseCase(notification_service)
     
-    return use_case.execute(session_token)
+    return use_case.execute(session_token) 

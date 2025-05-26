@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-from endpoints import notifications, notifications_server
+from endpoints.external import notifications_external
+from endpoints.internal import notifications_internal
 from utils.logger import setup_logger
 
 app = FastAPI()
@@ -8,10 +9,11 @@ app = FastAPI()
 logger = setup_logger()
 logger.info("Starting CoffeeTech Notification Service")
 
-# Incluir las rutas de notificaciones
-app.include_router(notifications.router, prefix="/notification", tags=["Notificaciones"])
+# Incluir las rutas de notificaciones externas (clientes móvil/web)
+app.include_router(notifications_external.router, prefix="/notification", tags=["Notificaciones"])
 
-app.include_router(notifications_server.router)
+# Incluir las rutas de notificaciones internas (microservicios)
+app.include_router(notifications_internal.router)
 
 @app.get("/", include_in_schema=False)
 def read_root():

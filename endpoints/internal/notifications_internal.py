@@ -232,4 +232,4 @@ def send_notification_endpoint(
     except Exception as e:
         db.rollback()
         logger.error(f"Error enviando notificación: {str(e)}")
-        return create_response("error", f"Error al enviar la notificación: {str(e)}", status_code=500)
+        return create_response("error", f"Error al enviar la notificación: {str(e)}", status_code=500) 
