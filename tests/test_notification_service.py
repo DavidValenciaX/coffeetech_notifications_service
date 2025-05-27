@@ -1,9 +1,9 @@
 import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 from datetime import datetime
 import pytz
 from domain.services.notification_service import NotificationService, SerializationError, NotificationNotFoundError
-from domain.entities import Notification, NotificationMapper
+from domain.entities import Notification
 from domain.schemas import (
     NotificationResponse,
     NotificationStateResponse,
