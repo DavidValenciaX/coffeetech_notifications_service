@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 import pytz
 from domain.repositories.notification_repository import NotificationRepositoryInterface
+from domain.entities import Notification, NotificationMapper
 from domain.schemas import (
     NotificationResponse, 
     NotificationStateResponse, 
@@ -31,7 +32,7 @@ class NotificationNotFoundError(Exception):
 
 
 class NotificationService:
-    """Service for handling notification business logic"""
+    """Enhanced notification service that uses domain entities while maintaining all existing functionality"""
     
     def __init__(self, notification_repository: NotificationRepositoryInterface):
         self.notification_repository = notification_repository
@@ -46,26 +47,34 @@ class NotificationService:
         return user
     
     def get_user_notifications(self, user_id: int) -> List[NotificationResponse]:
-        """Get and serialize notifications for a user"""
-        notifications = self.notification_repository.get_notifications_by_user_id(user_id)
-        logger.info(f"Notificaciones obtenidas: {len(notifications)}")
+        """Get and serialize notifications for a user using entities"""
+        notification_models = self.notification_repository.get_notifications_by_user_id(user_id)
+        logger.info(f"Notificaciones obtenidas: {len(notification_models)}")
         
-        if not notifications:
+        if not notification_models:
             logger.info("No hay notificaciones para este usuario.")
             return []
         
         try:
+            # Convert models to entities
+            notification_entities = [
+                NotificationMapper.to_entity(model) 
+                for model in notification_models
+            ]
+            
+            # Convert entities to response DTOs
             notification_responses = [
                 NotificationResponse(
-                    notification_id=notification.notification_id,
-                    message=notification.message,
-                    notification_date=notification.notification_date,
-                    invitation_id=notification.invitation_id,
-                    notification_type=notification.notification_type.name if notification.notification_type else None,
-                    notification_state=notification.state.name if notification.state else None
+                    notification_id=entity.notification_id,
+                    message=entity.message,
+                    notification_date=entity.notification_date,
+                    invitation_id=entity.invitation_id,
+                    notification_type=entity.notification_type_name,
+                    notification_state=entity.notification_state_name
                 )
-                for notification in notifications
+                for entity in notification_entities
             ]
+            
             logger.info(f"Notificaciones serializadas correctamente: {len(notification_responses)}")
             return notification_responses
         except Exception as e:
@@ -95,26 +104,33 @@ class NotificationService:
         ]
     
     def get_all_notifications(self) -> List[NotificationDetailResponse]:
-        """Get all notifications"""
-        notifications = self.notification_repository.get_all_notifications()
+        """Get all notifications using entities"""
+        notification_models = self.notification_repository.get_all_notifications()
+        
+        # Convert to entities and then to response DTOs
+        notification_entities = [
+            NotificationMapper.to_entity(model) 
+            for model in notification_models
+        ]
+        
         return [
             NotificationDetailResponse(
-                notification_id=notification.notification_id,
-                message=notification.message,
-                notification_date=notification.notification_date,
-                invitation_id=notification.invitation_id,
-                notification_type_id=notification.notification_type_id,
-                notification_state_id=notification.notification_state_id,
-                user_id=notification.user_id
+                notification_id=entity.notification_id,
+                message=entity.message,
+                notification_date=entity.notification_date,
+                invitation_id=entity.invitation_id,
+                notification_type_id=entity.notification_type_id,
+                notification_state_id=entity.notification_state_id,
+                user_id=entity.user_id
             )
-            for notification in notifications
+            for entity in notification_entities
         ]
     
     def get_notification_by_invitation(self, invitation_id: int) -> NotificationByInvitationResponse:
         """Get notification by invitation ID"""
-        notification = self.notification_repository.get_notification_by_invitation(invitation_id)
+        notification_model = self.notification_repository.get_notification_by_invitation(invitation_id)
         return NotificationByInvitationResponse(
-            notification_id=notification.notification_id if notification else None
+            notification_id=notification_model.notification_id if notification_model else None
         )
     
     def delete_notifications_by_invitation(self, invitation_id: int) -> DeleteNotificationsResponse:
@@ -128,10 +144,27 @@ class NotificationService:
             raise
     
     def update_notification_state(self, notification_id: int, notification_state_id: int) -> None:
-        """Update notification state"""
-        notification = self.notification_repository.update_notification_state(notification_id, notification_state_id)
-        if not notification:
+        """Update notification state using entity validation"""
+        # Get current notification
+        current_model = self.notification_repository.get_notification_by_id(notification_id)
+        if not current_model:
             raise NotificationNotFoundError("Notificación no encontrada")
+        
+        # Convert to entity and validate state change
+        notification_entity = NotificationMapper.to_entity(current_model)
+        
+        try:
+            # Use entity validation for state update
+            notification_entity.update_state(notification_state_id)
+        except ValueError as e:
+            logger.error(f"Invalid state update: {e}")
+            raise ValueError(f"Estado inválido: {str(e)}")
+        
+        # Update in repository
+        updated_model = self.notification_repository.update_notification_state(notification_id, notification_state_id)
+        if not updated_model:
+            raise NotificationNotFoundError("Error actualizando notificación")
+            
         logger.info(f"Estado de notificación {notification_id} actualizado a {notification_state_id}")
     
     def _send_fcm_to_token(self, token: str, title: str, body: str, fcm_errors: list, invalid_tokens: list) -> bool:
@@ -175,10 +208,10 @@ class NotificationService:
         return sent_count
     
     def send_notification(self, request: SendNotificationRequest) -> SendNotificationResponse:
-        """Send a notification with FCM support"""
+        """Send a notification using entity-based approach with FCM support"""
         try:
-            # Create notification record
-            new_notification = self.notification_repository.create_notification(
+            # Step 1: Create notification entity with validation
+            notification_entity = Notification.create_new(
                 message=request.message,
                 user_id=request.user_id,
                 notification_type_id=request.notification_type_id,
@@ -186,13 +219,29 @@ class NotificationService:
                 notification_state_id=request.notification_state_id
             )
             
-            # Get user devices
+            # Step 2: Apply business rules
+            if notification_entity.is_invitation_notification():
+                logger.info("Processing invitation notification")
+            
+            # Step 3: Save notification to database
+            saved_model = self.notification_repository.create_notification(
+                message=notification_entity.message,
+                user_id=notification_entity.user_id,
+                notification_type_id=notification_entity.notification_type_id,
+                invitation_id=notification_entity.invitation_id,
+                notification_state_id=notification_entity.notification_state_id
+            )
+            
+            # Convert back to entity with ID
+            saved_entity = NotificationMapper.to_entity(saved_model)
+            
+            # Step 4: Handle FCM notifications
             user_devices = get_user_devices_by_user_id(request.user_id)
             
             if not user_devices:
                 logger.info(f"Usuario {request.user_id} no tiene dispositivos registrados para notificaciones FCM")
                 return SendNotificationResponse(
-                    notification_id=new_notification.notification_id,
+                    notification_id=saved_entity.notification_id,
                     devices_notified=0
                 )
             
@@ -206,18 +255,77 @@ class NotificationService:
             if request.fcm_token and request.fcm_title and request.fcm_body:
                 if self._send_fcm_to_token(request.fcm_token, request.fcm_title, request.fcm_body, fcm_errors, invalid_tokens):
                     sent_count += 1
+            
+            # Step 5: Update notification state if FCM was successful
+            if sent_count > 0:
+                try:
+                    saved_entity.mark_as_sent()
+                    self.update_notification_state(
+                        saved_entity.notification_id, 
+                        saved_entity.notification_state_id
+                    )
+                    logger.info(f"Notification {saved_entity.notification_id} marked as sent")
+                except Exception as e:
+                    logger.warning(f"Could not update notification state to sent: {e}")
 
             # Log invalid tokens
             if invalid_tokens:
                 logger.warning(f"Tokens FCM inválidos detectados: {invalid_tokens}")
 
             return SendNotificationResponse(
-                notification_id=new_notification.notification_id,
+                notification_id=saved_entity.notification_id,
                 devices_notified=sent_count,
                 invalid_tokens=invalid_tokens if invalid_tokens else None,
                 fcm_errors=fcm_errors if fcm_errors else None
             )
             
+        except ValueError as e:
+            # Handle entity validation errors
+            logger.error(f"Error de validación de entidad: {e}")
+            raise ValueError(f"Datos de notificación inválidos: {str(e)}")
         except Exception as e:
             logger.error(f"Error enviando notificación: {str(e)}")
+            raise
+    
+    # Additional entity-based methods
+    
+    def get_notification_entity_by_id(self, notification_id: int) -> Optional[Notification]:
+        """Get a notification as a domain entity"""
+        model = self.notification_repository.get_notification_by_id(notification_id)
+        if model:
+            return NotificationMapper.to_entity(model)
+        return None
+    
+    def get_user_notifications_as_entities(self, user_id: int) -> List[Notification]:
+        """Get user notifications as domain entities"""
+        models = self.notification_repository.get_notifications_by_user_id(user_id)
+        return [NotificationMapper.to_entity(model) for model in models]
+    
+    def process_notification_workflow(self, notification_entity: Notification) -> Notification:
+        """Process a complete notification workflow using entity business logic"""
+        try:
+            # Apply business rules based on entity state
+            if notification_entity.is_pending():
+                logger.info(f"Processing pending notification {notification_entity.notification_id}")
+                
+                # Apply specific business logic based on type
+                if notification_entity.is_invitation_notification():
+                    logger.info("Applying invitation-specific business rules")
+                    # Add invitation-specific logic here
+                
+                # Mark as processed/sent
+                notification_entity.mark_as_sent()
+                
+                # Update in database
+                self.update_notification_state(
+                    notification_entity.notification_id,
+                    notification_entity.notification_state_id
+                )
+                
+                logger.info(f"Notification {notification_entity.notification_id} workflow completed")
+            
+            return notification_entity
+            
+        except Exception as e:
+            logger.error(f"Error in notification workflow: {e}")
             raise 
