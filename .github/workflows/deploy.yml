@@ -13,12 +13,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
-        fetch-depth: 0 # Recommended for Codecov
+        fetch-depth: 2 # Recommended for Codecov
 
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.13' # Using Python 3.13 as indicated by your venv
+        python-version: '3.13'
 
     - name: Install dependencies
       run: |
@@ -32,7 +32,7 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
-        slug: DavidValenciaX/notifications-service
+        slug: DavidValenciaX/coffeetech_notifications_service
 
     - name: Set up SSH
       uses: webfactory/ssh-agent@v0.7.0
