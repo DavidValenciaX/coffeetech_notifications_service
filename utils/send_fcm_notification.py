@@ -11,9 +11,24 @@ SERVICE_ACCOUNT = os.path.join(
     'serviceAccountKey.json'
 )
 
-if not firebase_admin._apps:
-    cred = credentials.Certificate(SERVICE_ACCOUNT)
-    firebase_admin.initialize_app(cred)
+def _initialize_firebase():
+    """
+    Initialize Firebase Admin SDK if not already initialized and credentials are available.
+    
+    This function handles the case where the service account key file doesn't exist
+    (e.g., in CI/CD environments or testing) by gracefully logging a warning instead
+    of raising an exception. This allows tests to run without requiring actual
+    Firebase credentials.
+    """
+    if not firebase_admin._apps:
+        if os.path.exists(SERVICE_ACCOUNT):
+            cred = credentials.Certificate(SERVICE_ACCOUNT)
+            firebase_admin.initialize_app(cred)
+        else:
+            logger.warning("Firebase service account key not found at %s. Firebase functionality will be limited.", SERVICE_ACCOUNT)
+
+# Initialize Firebase on module import if credentials are available
+_initialize_firebase()
 
 def send_fcm_notification(fcm_token: str, title: str, body: str):
     """
@@ -33,17 +48,25 @@ def send_fcm_notification(fcm_token: str, title: str, body: str):
     Returns:
         dict: Información sobre el resultado del envío, incluyendo si fue exitoso y cualquier error.
     """
-    # Construir el mensaje
-    message = messaging.Message(
-        notification=messaging.Notification(title=title, body=body),
-        token=fcm_token,
-    )
     result = {
         "success": False,
         "token": fcm_token,
         "error_type": None,
         "error_message": None
     }
+    
+    # Check if Firebase is initialized
+    if not firebase_admin._apps:
+        logger.error("Firebase Admin SDK not initialized. Cannot send notification.")
+        result["error_type"] = "firebase_not_initialized"
+        result["error_message"] = "Firebase Admin SDK not initialized. Service account key may be missing."
+        return result
+    
+    # Construir el mensaje
+    message = messaging.Message(
+        notification=messaging.Notification(title=title, body=body),
+        token=fcm_token,
+    )
     
     try:
         response = messaging.send(message)

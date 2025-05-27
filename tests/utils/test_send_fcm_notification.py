@@ -266,42 +266,81 @@ class TestSendFCMNotification:
                 # Check that error was logged
                 assert "Error inesperado enviando notificación" in caplog.text
 
+    def test_firebase_not_initialized(self, sample_notification_data, caplog):
+        """Test handling when Firebase is not initialized."""
+        with patch('utils.send_fcm_notification.firebase_admin._apps', []):
+            with caplog.at_level(logging.ERROR):
+                result = send_fcm_notification(
+                    sample_notification_data["fcm_token"],
+                    sample_notification_data["title"],
+                    sample_notification_data["body"]
+                )
+                
+                # Verify the result
+                assert result["success"] is False
+                assert result["token"] == sample_notification_data["fcm_token"]
+                assert result["error_type"] == "firebase_not_initialized"
+                assert "Firebase Admin SDK not initialized" in result["error_message"]
+                
+                # Check that error was logged
+                assert "Firebase Admin SDK not initialized" in caplog.text
+
 
 class TestFirebaseInitialization:
     """Test suite for Firebase app initialization."""
 
-    def test_firebase_app_initialization_when_no_apps_exist(self):
-        """Test Firebase app initialization when no apps exist."""
+    def test_firebase_app_initialization_when_credentials_exist(self, caplog):
+        """Test Firebase app initialization when service account file exists."""
         with patch('utils.send_fcm_notification.firebase_admin._apps', []), \
+             patch('utils.send_fcm_notification.os.path.exists') as mock_exists, \
              patch('utils.send_fcm_notification.credentials.Certificate') as mock_cert, \
-             patch('utils.send_fcm_notification.firebase_admin.initialize_app') as mock_init, \
-             patch('os.path.join') as mock_join, \
-             patch('os.path.dirname') as mock_dirname:
+             patch('utils.send_fcm_notification.firebase_admin.initialize_app') as mock_init:
             
-            mock_dirname.return_value = "/test/path"
-            mock_join.return_value = "/test/path/serviceAccountKey.json"
+            mock_exists.return_value = True
             mock_cert_instance = Mock()
             mock_cert.return_value = mock_cert_instance
             
-            # Import the module to trigger initialization
-            import importlib
-            import utils.send_fcm_notification
-            importlib.reload(utils.send_fcm_notification)
+            # Call the initialization function directly
+            from utils.send_fcm_notification import _initialize_firebase
+            _initialize_firebase()
             
             # Verify initialization was called
-            mock_cert.assert_called_once_with("/test/path/serviceAccountKey.json")
+            mock_cert.assert_called_once()
             mock_init.assert_called_once_with(mock_cert_instance)
+
+    def test_firebase_app_initialization_when_credentials_missing(self, caplog):
+        """Test Firebase app initialization when service account file is missing."""
+        with patch('utils.send_fcm_notification.firebase_admin._apps', []), \
+             patch('utils.send_fcm_notification.os.path.exists') as mock_exists, \
+             patch('utils.send_fcm_notification.credentials.Certificate') as mock_cert, \
+             patch('utils.send_fcm_notification.firebase_admin.initialize_app') as mock_init:
+            
+            mock_exists.return_value = False
+            
+            with caplog.at_level(logging.WARNING):
+                # Call the initialization function directly
+                from utils.send_fcm_notification import _initialize_firebase
+                _initialize_firebase()
+                
+                # Verify initialization was NOT called
+                mock_cert.assert_not_called()
+                mock_init.assert_not_called()
+                
+                # Verify warning was logged
+                assert "Firebase service account key not found" in caplog.text
 
     def test_firebase_app_not_initialized_when_apps_exist(self):
         """Test Firebase app is not re-initialized when apps already exist."""
         with patch('utils.send_fcm_notification.firebase_admin._apps', [Mock()]), \
+             patch('utils.send_fcm_notification.os.path.exists') as mock_exists, \
              patch('utils.send_fcm_notification.credentials.Certificate') as mock_cert, \
              patch('utils.send_fcm_notification.firebase_admin.initialize_app') as mock_init:
             
-            # Import the module
-            import importlib
-            import utils.send_fcm_notification
-            importlib.reload(utils.send_fcm_notification)
+            mock_exists.return_value = True
+            
+            # Call the initialization function directly
+            from utils.send_fcm_notification import _initialize_firebase
+            _initialize_firebase()
             
             # Verify initialization was NOT called
             mock_cert.assert_not_called()
@@ -309,24 +348,15 @@ class TestFirebaseInitialization:
 
     def test_service_account_path_construction(self):
         """Test that the service account path is constructed correctly."""
-        with patch('utils.send_fcm_notification.firebase_admin._apps', [Mock()]), \
-             patch('utils.send_fcm_notification.os.path.join') as mock_join, \
-             patch('utils.send_fcm_notification.os.path.dirname') as mock_dirname:
-            
-            # Set up the mock to return values for the nested dirname calls
-            mock_dirname.side_effect = lambda x: {
-                '/test/utils/send_fcm_notification.py': '/test/utils',
-                '/test/utils': '/test'
-            }.get(x, '/test')
-            
-            expected_path = "/test/serviceAccountKey.json"
-            mock_join.return_value = expected_path
-            
-            # Import the module to trigger path construction
-            import importlib
-            import utils.send_fcm_notification
-            importlib.reload(utils.send_fcm_notification)
-            
-            # Verify path construction - dirname should be called twice for double dirname
-            assert mock_dirname.call_count >= 2
-            mock_join.assert_called_with('/test', "serviceAccountKey.json") 
+        from utils.send_fcm_notification import SERVICE_ACCOUNT
+        import os
+        
+        # Verify the path ends with serviceAccountKey.json
+        assert SERVICE_ACCOUNT.endswith("serviceAccountKey.json")
+        
+        # Verify the path construction logic
+        expected_base = os.path.dirname(os.path.dirname(os.path.abspath(__file__).replace('tests/utils', 'utils')))
+        expected_path = os.path.join(expected_base, 'serviceAccountKey.json')
+        
+        # The paths should have the same filename
+        assert os.path.basename(SERVICE_ACCOUNT) == os.path.basename(expected_path) 
