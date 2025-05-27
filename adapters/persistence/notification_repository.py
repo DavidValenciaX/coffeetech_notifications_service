@@ -1,5 +1,5 @@
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from datetime import datetime
 import pytz
 from models.models import Notifications, NotificationStates, NotificationTypes
@@ -14,7 +14,10 @@ class NotificationRepository(NotificationRepositoryInterface):
     
     def get_notifications_by_user_id(self, user_id: int) -> List[Notifications]:
         """Get all notifications for a specific user"""
-        return self.db.query(Notifications).filter(Notifications.user_id == user_id).all()
+        return (self.db.query(Notifications)
+                .options(joinedload(Notifications.notification_type), joinedload(Notifications.state))
+                .filter(Notifications.user_id == user_id)
+                .all())
     
     def get_all_notification_states(self) -> List[NotificationStates]:
         """Get all notification states"""
@@ -26,7 +29,9 @@ class NotificationRepository(NotificationRepositoryInterface):
     
     def get_all_notifications(self) -> List[Notifications]:
         """Get all notifications"""
-        return self.db.query(Notifications).all()
+        return (self.db.query(Notifications)
+                .options(joinedload(Notifications.notification_type), joinedload(Notifications.state))
+                .all())
     
     def get_notification_by_invitation(self, invitation_id: int) -> Optional[Notifications]:
         """Get notification by invitation ID"""
@@ -94,10 +99,17 @@ class NotificationRepository(NotificationRepositoryInterface):
         )
         self.db.add(new_notification)
         self.db.commit()
-        return new_notification
+        
+        # Refresh to get the relationships loaded
+        self.db.refresh(new_notification)
+        return (self.db.query(Notifications)
+                .options(joinedload(Notifications.notification_type), joinedload(Notifications.state))
+                .filter(Notifications.notification_id == new_notification.notification_id)
+                .first())
     
     def get_notification_by_id(self, notification_id: int) -> Optional[Notifications]:
         """Get notification by ID"""
-        return self.db.query(Notifications).filter(
-            Notifications.notification_id == notification_id
-        ).first() 
+        return (self.db.query(Notifications)
+                .options(joinedload(Notifications.notification_type), joinedload(Notifications.state))
+                .filter(Notifications.notification_id == notification_id)
+                .first()) 

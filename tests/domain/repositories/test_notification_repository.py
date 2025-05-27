@@ -53,7 +53,7 @@ class TestNotificationRepository:
         # Arrange
         user_id = 123
         expected_notifications = [sample_notification]
-        mock_db_session.query.return_value.filter.return_value.all.return_value = expected_notifications
+        mock_db_session.query.return_value.options.return_value.filter.return_value.all.return_value = expected_notifications
         
         # Act
         result = notification_repository.get_notifications_by_user_id(user_id)
@@ -61,14 +61,15 @@ class TestNotificationRepository:
         # Assert
         assert result == expected_notifications
         mock_db_session.query.assert_called_once_with(Notifications)
-        mock_db_session.query.return_value.filter.assert_called_once()
-        mock_db_session.query.return_value.filter.return_value.all.assert_called_once()
+        mock_db_session.query.return_value.options.assert_called_once()
+        mock_db_session.query.return_value.options.return_value.filter.assert_called_once()
+        mock_db_session.query.return_value.options.return_value.filter.return_value.all.assert_called_once()
 
     def test_get_notifications_by_user_id_empty_result(self, notification_repository, mock_db_session):
         """Test retrieval of notifications by user ID when no notifications exist"""
         # Arrange
         user_id = 999
-        mock_db_session.query.return_value.filter.return_value.all.return_value = []
+        mock_db_session.query.return_value.options.return_value.filter.return_value.all.return_value = []
         
         # Act
         result = notification_repository.get_notifications_by_user_id(user_id)
@@ -133,7 +134,7 @@ class TestNotificationRepository:
         """Test successful retrieval of all notifications"""
         # Arrange
         expected_notifications = [sample_notification]
-        mock_db_session.query.return_value.all.return_value = expected_notifications
+        mock_db_session.query.return_value.options.return_value.all.return_value = expected_notifications
         
         # Act
         result = notification_repository.get_all_notifications()
@@ -141,12 +142,13 @@ class TestNotificationRepository:
         # Assert
         assert result == expected_notifications
         mock_db_session.query.assert_called_once_with(Notifications)
-        mock_db_session.query.return_value.all.assert_called_once()
+        mock_db_session.query.return_value.options.assert_called_once()
+        mock_db_session.query.return_value.options.return_value.all.assert_called_once()
 
     def test_get_all_notifications_empty_result(self, notification_repository, mock_db_session):
         """Test retrieval of all notifications when none exist"""
         # Arrange
-        mock_db_session.query.return_value.all.return_value = []
+        mock_db_session.query.return_value.options.return_value.all.return_value = []
         
         # Act
         result = notification_repository.get_all_notifications()
@@ -293,7 +295,7 @@ class TestNotificationRepository:
 
     @patch('adapters.persistence.notification_repository.datetime')
     @patch('adapters.persistence.notification_repository.pytz')
-    def test_create_notification_success(self, mock_pytz, mock_datetime, notification_repository, mock_db_session):
+    def test_create_notification_success(self, mock_pytz, mock_datetime, notification_repository, mock_db_session, sample_notification):
         """Test successful creation of a new notification"""
         # Arrange
         message = "Test notification"
@@ -307,6 +309,9 @@ class TestNotificationRepository:
         mock_now = datetime(2023, 1, 1, 12, 0, 0)
         mock_datetime.now.return_value = mock_now
         
+        # Mock the query chain for the final query after commit
+        mock_db_session.query.return_value.options.return_value.filter.return_value.first.return_value = sample_notification
+        
         # Act
         result = notification_repository.create_notification(
             message, user_id, notification_type_id, invitation_id, notification_state_id
@@ -315,6 +320,7 @@ class TestNotificationRepository:
         # Assert
         mock_db_session.add.assert_called_once()
         mock_db_session.commit.assert_called_once()
+        mock_db_session.refresh.assert_called_once()
         mock_pytz.timezone.assert_called_once_with("America/Bogota")
         mock_datetime.now.assert_called_once_with(mock_timezone)
         
@@ -327,16 +333,14 @@ class TestNotificationRepository:
         assert added_notification.notification_state_id == notification_state_id
         assert added_notification.notification_date == mock_now
         
-        # Verify the returned notification is the same as the one added
-        assert result == added_notification
+        # Verify the returned notification is from the final query
+        assert result == sample_notification
 
     def test_get_notification_by_id_success(self, notification_repository, mock_db_session, sample_notification):
         """Test successful retrieval of notification by ID"""
         # Arrange
         notification_id = 1
-        mock_query = MagicMock()
-        mock_db_session.query.return_value = mock_query
-        mock_query.filter.return_value.first.return_value = sample_notification
+        mock_db_session.query.return_value.options.return_value.filter.return_value.first.return_value = sample_notification
         
         # Act
         result = notification_repository.get_notification_by_id(notification_id)
@@ -344,16 +348,15 @@ class TestNotificationRepository:
         # Assert
         assert result == sample_notification
         mock_db_session.query.assert_called_once_with(Notifications)
-        mock_query.filter.assert_called_once()
-        mock_query.filter.return_value.first.assert_called_once()
+        mock_db_session.query.return_value.options.assert_called_once()
+        mock_db_session.query.return_value.options.return_value.filter.assert_called_once()
+        mock_db_session.query.return_value.options.return_value.filter.return_value.first.assert_called_once()
 
     def test_get_notification_by_id_not_found(self, notification_repository, mock_db_session):
         """Test retrieval of notification by ID when notification doesn't exist"""
         # Arrange
         notification_id = 999
-        mock_query = MagicMock()
-        mock_db_session.query.return_value = mock_query
-        mock_query.filter.return_value.first.return_value = None
+        mock_db_session.query.return_value.options.return_value.filter.return_value.first.return_value = None
         
         # Act
         result = notification_repository.get_notification_by_id(notification_id)

@@ -256,17 +256,13 @@ class NotificationService:
                 if self._send_fcm_to_token(request.fcm_token, request.fcm_title, request.fcm_body, fcm_errors, invalid_tokens):
                     sent_count += 1
             
-            # Step 5: Update notification state if FCM was successful
+            # Step 5: FCM notification sent successfully
+            # Note: We do NOT change the notification state here
+            # Notifications remain in their original state until user responds
             if sent_count > 0:
-                try:
-                    saved_entity.mark_as_sent()
-                    self.update_notification_state(
-                        saved_entity.notification_id, 
-                        saved_entity.notification_state_id
-                    )
-                    logger.info(f"Notification {saved_entity.notification_id} marked as sent")
-                except Exception as e:
-                    logger.warning(f"Could not update notification state to sent: {e}")
+                logger.info(f"FCM notification sent successfully to {sent_count} devices for notification {saved_entity.notification_id}")
+            else:
+                logger.info(f"No FCM notifications sent for notification {saved_entity.notification_id}")
 
             # Log invalid tokens
             if invalid_tokens:
@@ -313,14 +309,9 @@ class NotificationService:
                     logger.info("Applying invitation-specific business rules")
                     # Add invitation-specific logic here
                 
-                # Mark as processed/sent
-                notification_entity.mark_as_sent()
-                
-                # Update in database
-                self.update_notification_state(
-                    notification_entity.notification_id,
-                    notification_entity.notification_state_id
-                )
+                # Apply business logic but don't automatically change state
+                # State changes should be explicit based on user actions
+                logger.info("Invitation notification processed, state remains pending until user responds")
                 
                 logger.info(f"Notification {notification_entity.notification_id} workflow completed")
             

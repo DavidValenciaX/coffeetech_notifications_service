@@ -147,25 +147,43 @@ class TestNotificationEntity:
             notification_state_id=1
         )
         
-        # Test pending state
+        # Test pending state (1 = 'Pendiente')
         assert notification.is_pending() is True
-        assert notification.is_sent() is False
-        assert notification.is_read() is False
+        assert notification.is_responded() is False
+        assert notification.is_scheduled() is False
+        assert notification.is_inactive() is False
+        assert notification.is_accepted() is False
+        assert notification.is_rejected() is False
         
-        # Test sent state
+        # Test responded state (2 = 'Respondida')
         notification.update_state(2)
         assert notification.is_pending() is False
-        assert notification.is_sent() is True
-        assert notification.is_read() is False
+        assert notification.is_responded() is True
+        assert notification.is_scheduled() is False
         
-        # Test read state
+        # Test scheduled state (3 = 'Programada')
         notification.update_state(3)
         assert notification.is_pending() is False
-        assert notification.is_sent() is False
-        assert notification.is_read() is True
+        assert notification.is_responded() is False
+        assert notification.is_scheduled() is True
+        
+        # Test inactive state (4 = 'Inactiva')
+        notification.update_state(4)
+        assert notification.is_pending() is False
+        assert notification.is_inactive() is True
+        
+        # Test accepted state (5 = 'Aceptada')
+        notification.update_state(5)
+        assert notification.is_pending() is False
+        assert notification.is_accepted() is True
+        
+        # Test rejected state (6 = 'Rechazada')
+        notification.update_state(6)
+        assert notification.is_pending() is False
+        assert notification.is_rejected() is True
     
-    def test_mark_as_sent(self):
-        """Test marking notification as sent"""
+    def test_mark_as_responded(self):
+        """Test marking notification as responded"""
         notification = Notification.create_new(
             message="Test",
             user_id=123,
@@ -174,12 +192,12 @@ class TestNotificationEntity:
             notification_state_id=1
         )
         
-        notification.mark_as_sent()
+        notification.mark_as_responded()
         assert notification.notification_state_id == 2
-        assert notification.is_sent() is True
+        assert notification.is_responded() is True
     
-    def test_mark_as_read(self):
-        """Test marking notification as read"""
+    def test_mark_as_accepted(self):
+        """Test marking notification as accepted"""
         notification = Notification.create_new(
             message="Test",
             user_id=123,
@@ -188,9 +206,23 @@ class TestNotificationEntity:
             notification_state_id=1
         )
         
-        notification.mark_as_read()
-        assert notification.notification_state_id == 3
-        assert notification.is_read() is True
+        notification.mark_as_accepted()
+        assert notification.notification_state_id == 5
+        assert notification.is_accepted() is True
+    
+    def test_mark_as_rejected(self):
+        """Test marking notification as rejected"""
+        notification = Notification.create_new(
+            message="Test",
+            user_id=123,
+            notification_type_id=1,
+            invitation_id=456,
+            notification_state_id=1
+        )
+        
+        notification.mark_as_rejected()
+        assert notification.notification_state_id == 6
+        assert notification.is_rejected() is True
     
     def test_is_invitation_notification(self):
         """Test checking if notification is invitation type"""

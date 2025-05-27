@@ -363,8 +363,10 @@ class TestNotificationService:
         result = notification_service.process_notification_workflow(sample_notification_entity)
         
         assert isinstance(result, Notification)
-        assert result.is_sent()  # Should be marked as sent
-        mock_repository.update_notification_state.assert_called_once_with(1, 2)  # Updated to sent state
+        # With new logic, notifications remain pending until user responds
+        assert result.is_pending()  # Should remain pending
+        # No automatic state update should occur
+        mock_repository.update_notification_state.assert_not_called()
     
     def test_process_notification_workflow_not_pending(self, notification_service, sample_notification_entity):
         """Test processing notification workflow for non-pending notification"""
@@ -380,10 +382,13 @@ class TestNotificationService:
     def test_process_notification_workflow_error(self, notification_service, mock_repository, sample_notification_entity):
         """Test handling errors in notification workflow"""
         sample_notification_entity.notification_id = 1
-        mock_repository.get_notification_by_id.side_effect = Exception("Database error")
         
-        with pytest.raises(Exception):
-            notification_service.process_notification_workflow(sample_notification_entity)
+        # With the new logic, the workflow doesn't make database calls that can fail
+        # So this test now verifies that the workflow completes successfully
+        result = notification_service.process_notification_workflow(sample_notification_entity)
+        
+        assert isinstance(result, Notification)
+        assert result.notification_id == 1
 
 
 class TestNotificationServiceIntegration:
@@ -437,8 +442,8 @@ class TestNotificationServiceIntegration:
         assert entity.is_invitation_notification()
         
         # Test state transitions
-        entity.mark_as_sent()
-        assert entity.is_sent()
+        entity.mark_as_responded()
+        assert entity.is_responded()
         assert not entity.is_pending()
 
 

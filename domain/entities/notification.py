@@ -97,31 +97,64 @@ class Notification:
     def is_pending(self) -> bool:
         """
         Check if the notification is in pending state
-        Assumes state ID 1 is 'pending' - this should be configured based on your states
+        State ID 1 = 'Pendiente'
         """
         return self.notification_state_id == 1
     
-    def is_sent(self) -> bool:
+    def is_responded(self) -> bool:
         """
-        Check if the notification has been sent
-        Assumes state ID 2 is 'sent' - this should be configured based on your states
+        Check if the notification has been responded to
+        State ID 2 = 'Respondida'
         """
         return self.notification_state_id == 2
     
-    def is_read(self) -> bool:
+    def is_scheduled(self) -> bool:
         """
-        Check if the notification has been read
-        Assumes state ID 3 is 'read' - this should be configured based on your states
+        Check if the notification is scheduled
+        State ID 3 = 'Programada'
         """
         return self.notification_state_id == 3
     
-    def mark_as_sent(self) -> None:
-        """Mark the notification as sent"""
-        self.update_state(2)  # Assuming 2 is 'sent' state
+    def is_inactive(self) -> bool:
+        """
+        Check if the notification is inactive
+        State ID 4 = 'Inactiva'
+        """
+        return self.notification_state_id == 4
     
-    def mark_as_read(self) -> None:
-        """Mark the notification as read"""
-        self.update_state(3)  # Assuming 3 is 'read' state
+    def is_accepted(self) -> bool:
+        """
+        Check if the notification has been accepted
+        State ID 5 = 'Aceptada'
+        """
+        return self.notification_state_id == 5
+    
+    def is_rejected(self) -> bool:
+        """
+        Check if the notification has been rejected
+        State ID 6 = 'Rechazada'
+        """
+        return self.notification_state_id == 6
+    
+    def mark_as_responded(self) -> None:
+        """Mark the notification as responded"""
+        self.update_state(2)  # 2 = 'Respondida'
+    
+    def mark_as_scheduled(self) -> None:
+        """Mark the notification as scheduled"""
+        self.update_state(3)  # 3 = 'Programada'
+    
+    def mark_as_inactive(self) -> None:
+        """Mark the notification as inactive"""
+        self.update_state(4)  # 4 = 'Inactiva'
+    
+    def mark_as_accepted(self) -> None:
+        """Mark the notification as accepted"""
+        self.update_state(5)  # 5 = 'Aceptada'
+    
+    def mark_as_rejected(self) -> None:
+        """Mark the notification as rejected"""
+        self.update_state(6)  # 6 = 'Rechazada'
     
     def is_invitation_notification(self) -> bool:
         """
